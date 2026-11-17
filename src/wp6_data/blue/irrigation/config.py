@@ -63,6 +63,18 @@ class ModelParams(_Strict):
     area_per_plant_m2: float
 
 
+class AdviceParams(_Strict):
+    allowable_depletion: float
+    target_margin: float
+    preferred_local_time: time
+
+    @model_validator(mode="after")
+    def _fraction(self) -> AdviceParams:
+        if not 0 < self.allowable_depletion < 1:
+            raise ValueError("allowable_depletion must be between 0 and 1")
+        return self
+
+
 class Exclusion(_Strict):
     probe: str
     start: datetime
@@ -79,6 +91,7 @@ class IrrigationConfig(_Strict):
     rain: RainParams
     watering: WateringParams
     model: ModelParams
+    advice: AdviceParams
     exclude: tuple[Exclusion, ...] = ()
 
     @model_validator(mode="after")

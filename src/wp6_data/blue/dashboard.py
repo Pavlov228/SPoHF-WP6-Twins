@@ -10,7 +10,7 @@ from wp6_data.blue.routes import api as blue_api
 from wp6_data.blue.routes import charts as blue_charts
 from wp6_data.blue.routes import gdd as gdd_route
 from wp6_data.blue.routes import irrigation as irrigation_route
-from wp6_data.blue.routes import ops
+from wp6_data.blue.routes import irrigation_simulator, ops
 from wp6_data.blue.routes.monitor import broken_sensors as broken_sensors_monitor
 from wp6_data.blue.routes.monitor import harvest as harvest_monitor
 from wp6_data.blue.routes.monitor import legacy_router as legacy_monitor_router
@@ -45,7 +45,8 @@ def _gdd_card() -> str:
 def _irrigation_card() -> str:
     return render_card(
         "Irrigation",
-        '<a href="/irrigation" role="button">Irrigation Dashboard</a>',
+        '<a href="/irrigation" role="button">Irrigation Dashboard</a>'
+        ' <a href="/irrigation/simulator" role="button" class="outline">Simulator</a>',
         description=(
             "Soil moisture fused from the soil probes: the basis for when and how "
             "much to water."
@@ -134,6 +135,7 @@ config = TwinConfig(
         blue_charts.router,
         gdd_route.router,
         irrigation_route.router,
+        irrigation_simulator.router,
         monitor_router,
         legacy_monitor_router,
         manual_monitor.router,

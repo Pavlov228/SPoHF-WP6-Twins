@@ -22,10 +22,11 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, Response
 from plotly.subplots import make_subplots
 
+from wp6_data.blue.irrigation.advice import Advice, Outlook, advise, outlook, trajectory
 from wp6_data.blue.irrigation.config import load_config
 from wp6_data.blue.irrigation.daily import daily_frame
 from wp6_data.blue.irrigation.events import load_events
-from wp6_data.blue.irrigation.model import forecast, load_model
+from wp6_data.blue.irrigation.model import load_model
 from wp6_data.blue.irrigation.moisture import (
     DISAGREES,
     DROPOUT,
@@ -97,6 +98,29 @@ async def irrigation_weather() -> IrrigationWeather:
     return cached
 
 
+def current_outlook(
+    result: FusedMoisture, weather: IrrigationWeather | None, events: pd.DataFrame | None,
+) -> Outlook | None:
+    """The 7-day outlook from the latest reading, or None when it can't be made."""
+    if weather is None:
+        return None
+    try:
+        config = load_config()
+        frame = daily_frame(result, weather, events, config.watering.timezone)
+        return outlook(frame, load_model(), datetime.now(UTC).date())
+    except Exception:
+        log.warning("irrigation_outlook_failed", exc_info=True)
+        return None
+
+
+def local_days_to_utc(frame: pd.DataFrame) -> pd.DataFrame:
+    """Daily rows are local days; place them on the UTC axis at local midnight."""
+    out = frame.copy()
+    out.index = pd.DatetimeIndex(out.index).tz_localize(load_config().watering.timezone)
+    out.index = out.index.tz_convert(UTC)
+    return out
+
+
 async def fused_moisture() -> FusedMoisture:
     """The fused stream over the whole history, cached briefly."""
     cached = _fused_cache.get("fused")
@@ -148,6 +172,45 @@ def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datet
         line={"color": "#f59e0b", "width": 1.5}, hovertemplate="%{y:.1f} mm<extra></extra>",
     ), row=row, col=1)
     fig.update_yaxes(title_text="mm / day", rangemode="tozero", row=row, col=1)
+
+
+def _advice_card(advice: Advice | None) -> str:
+    """When and how much, from the 7-day outlook, with a link to the what-ifs."""
+    link = '<a href="/irrigation/simulator" role="button" class="outline">What if…?</a>'
+    if advice is None:
+        return render_card(
+            "Watering advice",
+            "<p>No advice right now: it needs a recent soil reading and the weather "
+            f"forecast.</p>{link}",
+        )
+    lv = advice.levels
+    depletion = 1 - lv.trigger / lv.field_capacity
+    context = (
+        f"<small>Next 7 days: {advice.rain_forecast_mm:.0f} mm rain forecast, crop uses "
+        f"about {advice.crop_use_mm:.0f} mm. Trigger {lv.trigger:.2f} "
+        f"({depletion:.0%} of the available water used), target {lv.target:.2f}.</small>"
+    )
+    if not advice.needed:
+        maybe = (
+            f" If the weather turns out drier, it could get there by "
+            f"<strong>{advice.possibly_on:%a %d %b}</strong>."
+            if advice.possibly_on else ""
+        )
+        body = (
+            f"<p><strong>No watering needed in the next 7 days.</strong> The soil stays "
+            f"above the trigger on the forecast weather.{maybe}</p>"
+        )
+    else:
+        body = (
+            f"<p><strong>Water on {advice.water_on:%A %d %B}, around "
+            f"{advice.water_at:%H:%M}.</strong> Without water the soil falls below the "
+            f"trigger that day.</p>"
+            f"<p>To bring it back to the target: about <strong>{advice.dose_mm:.0f} mm"
+            f"</strong>, which is <strong>{advice.dose_l_per_plant:.0f} L per plant</strong> "
+            f"if a litre spreads over {advice.area_per_plant_m2:g} m² per plant. The probes "
+            f"don't see drip, so treat the litres as an estimate.</p>"
+        )
+    return render_card("Watering advice", body + context + f"<p>{link}</p>")
 
 
 #: Colour of the no-watering forecast and its band.
@@ -457,22 +520,11 @@ async def irrigation_page(
         log.warning("irrigation_events_failed", exc_info=True)
         events = None
 
-    outlook = None
-    if weather is not None:
-        try:
-            config = load_config()
-            frame = daily_frame(
-                result, weather, events if events is not None else pd.DataFrame(
-                    columns=["volume_l_per_plant"], index=pd.DatetimeIndex([], tz="UTC"),
-                ),
-                config.watering.timezone,
-            )
-            outlook = forecast(frame, load_model(), config, datetime.now(UTC).date())
-            # Daily rows are local days; draw them on the UTC axis at local midnight.
-            outlook.index = outlook.index.tz_localize(config.watering.timezone).tz_convert(UTC)
-        except Exception:
-            log.warning("irrigation_forecast_failed", exc_info=True)
-            outlook = None
+    current = current_outlook(result, weather, events)
+    forecast_path = advice = None
+    if current is not None:
+        forecast_path = local_days_to_utc(trajectory(current, load_model(), load_config()))
+        advice = advise(current, load_model(), load_config())
 
     has_data = result.coverage[result.coverage > 0]
     if has_data.empty:
@@ -508,11 +560,12 @@ async def irrigation_page(
 
     body = (
         "<h1>Irrigation</h1>"
+        + _advice_card(advice)
         + explainer
         + year_toggle(years, year, lambda y: f"/irrigation?year={y}")
         + render_card(
             f"Soil moisture and weather {year}",
-            _chart(result, weather, start, end, events, outlook),
+            _chart(result, weather, start, end, events, forecast_path),
         )
         + render_card(
             f"Probe quality {year}",

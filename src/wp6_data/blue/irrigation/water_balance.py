@@ -34,7 +34,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 #: Midsummer day of year, the pivot of the seasonal crop coefficient.
-_KC_PIVOT_DOY = 196.0
+KC_PIVOT_DOY = 196.0
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ def simulate(
         mix = p["mix"]
         rain = mix * inputs.rain[h] + (1 - mix) * inputs.rain[h - 1]
         irr = mix * inputs.irrigation[h] + (1 - mix) * inputs.irrigation[h - 1]
-        kc = np.clip(1.0 + p["kc_slope"] * (inputs.doy[h] - _KC_PIVOT_DOY) / 100.0, 0.05, None)
+        kc = np.clip(1.0 + p["kc_slope"] * (inputs.doy[h] - KC_PIVOT_DOY) / 100.0, 0.05, None)
         ks = np.clip(s / p["theta"], 0.0, 1.0)
         et = p["et_scale"] * kc * ks * inputs.et0[h]
         drain = p["drain_rate"] * np.maximum(s - p["s_fc"], 0.0)

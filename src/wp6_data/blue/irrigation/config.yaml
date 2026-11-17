@@ -82,6 +82,19 @@ watering:
 model:
   area_per_plant_m2: 2.2
 
+# Advice (issue 071, research note §3 and §8). Levels are on the fused 0–1 scale,
+# relative to the model's fitted field capacity (s_fc in model.yaml); 0 is
+# taken as the dry limit (the driest reading on record).
+advice:
+  # Share of the available water (field capacity → dry limit) that may be used
+  # up before watering. Literature: about 25 % (substrate trials) to 50 %
+  # (extension default); 33 % matches the farm's 2025 practice.
+  allowable_depletion: 0.33
+  # Refill to field capacity minus this margin, so a dose doesn't drain away.
+  target_margin: 0.07
+  # When to water: early morning, before the day's demand peaks (note §3).
+  preferred_local_time: "06:00"
+
 # Manual override for a fault the mechanical checks miss. Prefer improving a
 # check over adding an entry here. Entries: {probe, start, end, reason}.
 exclude: []

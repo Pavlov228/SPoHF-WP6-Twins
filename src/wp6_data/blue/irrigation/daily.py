@@ -40,7 +40,7 @@ def _local_day(index: pd.DatetimeIndex, timezone: str) -> pd.Index:
 def daily_frame(
     fused: FusedMoisture,
     weather: IrrigationWeather,
-    events: pd.DataFrame,
+    events: pd.DataFrame | None,
     timezone: str,
 ) -> pd.DataFrame:
     """One row per local day with soil moisture, weather and watering."""
@@ -56,7 +56,7 @@ def daily_frame(
     rain = hours["rain_mm"].groupby(weather_day).sum(min_count=1)
     et0 = hours["et0_mm"].groupby(weather_day).sum(min_count=1)
 
-    if events.empty:
+    if events is None or events.empty:
         irrigation = pd.Series(dtype=float)
     else:
         irrigation = events["volume_l_per_plant"].groupby(

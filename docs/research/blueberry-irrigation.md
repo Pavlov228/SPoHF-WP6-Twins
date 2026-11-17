@@ -349,3 +349,41 @@ and Chronos-2 edges 2026 (+21 % vs +17 %).
 2. Tie the dose response to rain over the plant's area (the proposed prior above).
 3. Calibrate A's bands: they catch 56 % instead of 80 %. Proposal: widen
    them using held-out residuals, as C and D already do.
+
+## 8. Advice levels (issue 071, decided 2026-11-17)
+
+The literature gives no threshold on our relative scale, so the trigger is set
+through **allowable depletion**: the share of the available water (field
+capacity → dry limit) that may be used up before watering.
+
+| Source | Allowable depletion |
+|---|---|
+| MSU extension: the default for blueberry, though "not studied adequately" ([MSU](https://bluedynamo.msu.edu/uploads/files/Irrigating%20Blueberries-may%202012.pdf), [MSU news](https://www.canr.msu.edu/news/using_irrigation_to_maintain_high_yields_of_blueberries)) | 50 % |
+| Blueberry in substrate: growth peaked at 25 %, and performance fell clearly past 50 % | 25 % |
+| Young plants have shallow roots (MSU: about 30 cm young, 45 cm older), so less reserve | favours the low end |
+
+**Decision: 33 %.**
+- On our scale, field capacity is `s_fc` ≈ 0.77 (fitted), and 0, the driest
+  reading on record (July 2026), is taken as the dry limit. That gives
+  **trigger = 0.77 × (1 − 0.33) ≈ 0.52**. The 25 % and 50 % readings give 0.58 and 0.39.
+- It matches practice: in 2025 the farm watered at a median soil level of
+  0.52 (range 0.31–0.74).
+- **Target** = field capacity − 0.07 ≈ 0.70. Water above it mostly drains.
+- **Time:** early morning (§3).
+
+**How much.**
+- The dose is the rain-equivalent depth that brings the no-watering path back
+  to the target on the advised day. It is converted to L/plant through the
+  2.2 m² dose prior (ADR 0009).
+- At that prior, refilling from the trigger to the target is about 25–30 mm,
+  or about **55–65 L/plant**. A summer day's crop use is about 1.8 mm, or about
+  4 L/plant. The farm's 1.3–2.4 L doses are small against that. This is
+  consistent with July 2026 being dry despite watering (≈143 mm ET0 against
+  ≈12 mm rain).
+- But the litres rest on the area assumption, so the advice labels them as an
+  estimate, and the simulator lets the farm try smaller doses.
+
+**What-ifs** run on the dedicated `/irrigation/simulator` page: rain scaled or
+delayed, a dose on a chosen day, morning or evening. The model is daily, so the
+time of day only decides which day a dose counts (an evening dose counts the
+next day).
