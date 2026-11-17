@@ -137,6 +137,15 @@ spec:
           - name: severity
             value: info
             matchType: "="
+      # Stock kube-prometheus-stack marker alert (severity=none, so the info
+      # route above doesn't catch it). It only exists to drive inhibition of
+      # info alerts, which happens before routing — dropping its notification
+      # changes nothing. See the runbook linked in the alert.
+      - receiver: discard
+        matchers:
+          - name: alertname
+            value: InfoInhibitor
+            matchType: "="
       - receiver: discard
         matchers:
           - name: alertname
