@@ -9,6 +9,13 @@ except rain, which is **fused** with the on-site gauge:
 
 So the gauge is checked against Open-Meteo over a rolling window (research
 note §5): it is used where it is plausible and replaced where it is not.
+Impossible gauge values (any negative reading, or an hour above
+``max_mm_per_hour``) are dropped first.
+
+Open-Meteo labels its hourly sums (rain, ET0) at the **end** of the hour they
+cover, while the gauge's hourly buckets are labelled at their start. Open-Meteo's
+sums are therefore moved back an hour to line up. The cross-correlation with the
+gauge peaks at exactly that offset.
 Each hour records which source supplied its rain. The forecast is Open-Meteo
 only, because the gauge cannot see the future.
 """
@@ -38,11 +45,20 @@ STATION = "station"
 OPEN_METEO = "open-meteo"
 FORECAST = "forecast"
 
+#: Upper bound on raw gauge rows fetched; it reports about every 20 minutes,
+#: so this covers decades.
+_MAX_GAUGE_READINGS = 2_000_000
+
 
 @dataclass(frozen=True)
 class IrrigationWeather:
-    """Hourly UTC frames with columns ``rain_mm``, ``rain_source``, ``et0_mm``,
-    ``temperature``, ``humidity``."""
+    """Hourly UTC frames, labelled at the start of each hour.
+
+    Columns: ``rain_mm`` and ``rain_source`` (what the model uses),
+    ``gauge_mm`` (the gauge's own reading, NaN where it has none) and
+    ``open_meteo_mm`` (Open-Meteo's), so both stay visible side by side,
+    plus ``et0_mm``, ``temperature`` and ``humidity``.
+    """
 
     actual: pd.DataFrame
     forecast: pd.DataFrame
@@ -89,10 +105,45 @@ def fuse_rain(
     return rain, source
 
 
-def _shape(hours: pd.DataFrame, rain: pd.Series, source: pd.Series) -> pd.DataFrame:
+#: Open-Meteo variables that are sums over the preceding hour, not instants.
+_HOURLY_SUMS = (RAIN, ET0)
+
+
+def align_hourly_sums(hours: pd.DataFrame) -> pd.DataFrame:
+    """Move Open-Meteo's end-of-hour sums back to the start of their hour."""
+    aligned = hours.copy()
+    for column in _HOURLY_SUMS:
+        if column in aligned:
+            aligned[column] = aligned[column].shift(-1, freq="h").reindex(aligned.index)
+    return aligned
+
+
+def plausible_gauge_hours(readings: pd.DataFrame, params: RainParams) -> pd.Series:
+    """Hourly gauge rain from raw readings, without impossible values.
+
+    An hour containing any negative reading, or summing above
+    ``max_mm_per_hour``, is dropped (NaN) rather than clipped. Such an hour
+    is a broken gauge, not a big shower.
+    """
+    if readings.empty:
+        return pd.Series(dtype=float, index=pd.DatetimeIndex([], tz="UTC"))
+    values = pd.Series(
+        readings["value"].to_numpy(dtype=float),
+        index=pd.to_datetime(readings["time"], utc=True).dt.floor("h"),
+    )
+    hourly = values.groupby(level=0).agg(["sum", "min"])
+    ok = (hourly["min"] >= 0) & (hourly["sum"] <= params.max_mm_per_hour)
+    return hourly["sum"].where(ok)
+
+
+def _shape(
+    hours: pd.DataFrame, rain: pd.Series, source: pd.Series, gauge: pd.Series,
+) -> pd.DataFrame:
     return pd.DataFrame({
         "rain_mm": rain,
         "rain_source": source,
+        "gauge_mm": gauge.reindex(hours.index),
+        "open_meteo_mm": hours[RAIN],
         "et0_mm": hours[ET0],
         "temperature": hours[TEMPERATURE],
         "humidity": hours[HUMIDITY],
@@ -114,27 +165,30 @@ async def load_weather(
     )
     start = datetime.combine(config.history_start, time.min, tzinfo=UTC)
     end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=UTC)
+    # Raw readings, not hourly sums: a negative reading must be seen to be
+    # rejected, and a database-side sum would net it off against real rain.
     rows = await provider.fetch_data(
         sensor_tags=[config.rain.station_sensor],
         device_names=[config.rain.station_device],
         start=start, end=end,
-        bucket=timedelta(hours=1), agg="sum",
-        limit=int((end - start) / timedelta(hours=1)) + 1,
+        limit=_MAX_GAUGE_READINGS,
     )
-    station = (
-        pd.Series(rows["value"].to_numpy(), index=pd.to_datetime(rows["time"], utc=True))
-        .groupby(level=0).sum()
-        if not rows.empty else pd.Series(dtype=float)
-    )
-    station.index = station.index.floor("h") if len(station) else station.index
+    station = plausible_gauge_hours(rows, config.rain)
+
+    # Align across the actual/forecast seam: the first forecast hour's sum
+    # belongs to the last actual hour.
+    both = align_hourly_sums(pd.concat([weather.actual, weather.forecast]))
+    cutoff = len(weather.actual)
+    weather = type(weather)(actual=both.iloc[:cutoff], forecast=both.iloc[cutoff:])
 
     actual = weather.actual
     rain, source = fuse_rain(station, actual[RAIN].fillna(0.0), config.rain)
     forecast = weather.forecast
+    no_gauge = pd.Series(dtype=float)
     return IrrigationWeather(
-        actual=_shape(actual, rain, source),
+        actual=_shape(actual, rain, source, station),
         forecast=_shape(
             forecast, forecast[RAIN].fillna(0.0),
-            pd.Series(FORECAST, index=forecast.index),
+            pd.Series(FORECAST, index=forecast.index), no_gauge,
         ),
     )

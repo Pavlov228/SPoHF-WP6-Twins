@@ -24,8 +24,6 @@ from plotly.subplots import make_subplots
 from wp6_data.blue.irrigation.config import load_config
 from wp6_data.blue.irrigation.moisture import FusedMoisture, load_fused, quality_table
 from wp6_data.blue.irrigation.weather import (
-    FORECAST,
-    OPEN_METEO,
     STATION,
     IrrigationWeather,
     load_weather,
@@ -49,12 +47,13 @@ _fused_cache: TTLCache = TTLCache(maxsize=2, ttl=15 * 60)
 _provider = BlueSensorProvider()
 settings = Settings()
 
-#: Rain bar colour per source: the gauge, Open-Meteo standing in for it, forecast.
-RAIN_COLOURS = {STATION: "#0ea5e9", OPEN_METEO: "#94a3b8", FORECAST: "#cbd5e1"}
-RAIN_LABELS = {
-    STATION: "Rain, on-site gauge",
-    OPEN_METEO: "Rain, Open-Meteo (gauge not trusted)",
-    FORECAST: "Rain, forecast",
+#: Rain traces: the gauge's own reading, coloured by whether the model trusts
+#: it, and Open-Meteo as a line, so the two can always be compared.
+RAIN_TRACES = {
+    "gauge_used": ("Gauge rain (used)", "#0ea5e9"),
+    "gauge_unused": ("Gauge rain (not trusted)", "#fca5a5"),
+    "open_meteo": ("Open-Meteo rain", "#475569"),
+    "forecast": ("Open-Meteo forecast", "#94a3b8"),
 }
 
 IRRIGATION_CSS = """
@@ -97,18 +96,42 @@ def _season_toggle(years: list[int], active: int) -> str:
 
 
 def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datetime, row: int):
-    hours = pd.concat([weather.actual, weather.forecast]).loc[start:end]
-    if hours.empty:
+    actual = weather.actual.loc[start:end]
+    forecast = weather.forecast.loc[start:end]
+    if actual.empty and forecast.empty:
         return
-    day = hours.index.floor("D")
-    rain = hours.groupby([day, "rain_source"])["rain_mm"].sum().unstack(fill_value=0.0)
-    for source, colour in RAIN_COLOURS.items():
-        if source in rain:
+
+    if not actual.empty:
+        day = actual.index.floor("D")
+        daily = actual.groupby(day).agg(
+            gauge=("gauge_mm", lambda v: v.sum(min_count=1)),
+            open_meteo=("open_meteo_mm", "sum"),
+            trusted=("rain_source", lambda v: (v == STATION).mean() >= 0.5),
+        )
+        for key, trusted in (("gauge_used", True), ("gauge_unused", False)):
+            label, colour = RAIN_TRACES[key]
+            bars = daily["gauge"].where(daily["trusted"] == trusted)
             fig.add_trace(go.Bar(
-                x=rain.index, y=rain[source], name=RAIN_LABELS[source],
-                marker_color=colour, hovertemplate="%{y:.1f} mm<extra></extra>",
+                x=daily.index, y=bars, name=label, marker_color=colour,
+                hovertemplate="%{y:.1f} mm<extra></extra>",
             ), row=row, col=1)
-    et0 = hours.groupby(day)["et0_mm"].sum()
+        label, colour = RAIN_TRACES["open_meteo"]
+        fig.add_trace(go.Scatter(
+            x=daily.index, y=daily["open_meteo"], name=label, mode="lines",
+            line={"color": colour, "width": 1, "shape": "hvh"},
+            hovertemplate="%{y:.1f} mm<extra></extra>",
+        ), row=row, col=1)
+
+    if not forecast.empty:
+        label, colour = RAIN_TRACES["forecast"]
+        future = forecast["open_meteo_mm"].groupby(forecast.index.floor("D")).sum()
+        fig.add_trace(go.Bar(
+            x=future.index, y=future, name=label, marker_color=colour,
+            hovertemplate="%{y:.1f} mm<extra></extra>",
+        ), row=row, col=1)
+
+    both = pd.concat([actual, forecast])
+    et0 = both.groupby(both.index.floor("D"))["et0_mm"].sum()
     fig.add_trace(go.Scatter(
         x=et0.index, y=et0, mode="lines", name="Reference ET0",
         line={"color": "#f59e0b", "width": 1.5}, hovertemplate="%{y:.1f} mm<extra></extra>",
@@ -251,9 +274,11 @@ async def irrigation_page(
         "of the probes that passed the quality checks, and the band shows how far they "
         "spread. Probes are dropped automatically while they read zero (dry peat "
         "losing contact), spike, or stop moving with the others.</p>"
-        "<p>Rain comes from the on-site gauge, which catches local showers. Where the "
-        "gauge is under-reading for weeks (a fault), Open-Meteo stands in, and its "
-        "bars are grey. ET0 is the reference evaporation demand of the day.</p>"
+        "<p>Rain: bars are the on-site gauge, and the dark line is Open-Meteo for the "
+        "same day. The model uses the gauge, which catches local showers, unless it has "
+        "under-read Open-Meteo for weeks (a fault). Its bars then turn red and "
+        "Open-Meteo stands in. Gauge hours with impossible values are dropped. ET0 is "
+        "the day's reference evaporation demand.</p>"
     )
 
     body = (

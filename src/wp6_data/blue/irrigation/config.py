@@ -28,6 +28,7 @@ class FusionParams(_Strict):
     consensus_window_days: int
     consensus_min_corr: float
     consensus_min_probes: int
+    frozen_below_c: float
 
     @model_validator(mode="after")
     def _ordered_quantiles(self) -> FusionParams:
@@ -39,6 +40,7 @@ class FusionParams(_Strict):
 class RainParams(_Strict):
     station_device: str
     station_sensor: str
+    max_mm_per_hour: float
     check_window_days: int
     min_reference_mm: float
     min_ratio: float
@@ -54,6 +56,7 @@ class Exclusion(_Strict):
 class IrrigationConfig(_Strict):
     probes: tuple[str, ...]
     sensor: str
+    temperature_sensor: str
     history_start: date
     fusion: FusionParams
     rain: RainParams

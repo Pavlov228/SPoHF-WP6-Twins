@@ -16,11 +16,16 @@ from wp6_data.blue import field_weather as field_weather_mod
 from wp6_data.blue.irrigation import weather
 from wp6_data.blue.irrigation.config import CONFIG_PATH, IrrigationConfig
 from wp6_data.blue.irrigation.weather import (
+    ET0,
     FORECAST,
     OPEN_METEO,
+    RAIN,
     STATION,
+    TEMPERATURE,
+    align_hourly_sums,
     fuse_rain,
     gauge_faulty_days,
+    plausible_gauge_hours,
 )
 
 DAYS = 90
@@ -125,9 +130,10 @@ async def test_load_weather_fuses_actuals_and_marks_the_forecast(monkeypatch):
 
     class FakeProvider:
         async def fetch_data(self, **kwargs):
-            assert kwargs["agg"] == "sum"
-            hours = pd.date_range("2025-06-01", "2025-06-10 23:00", freq="h", tz=UTC)
-            return pd.DataFrame({"time": hours, "value": 0.6})
+            # Raw readings: negatives must be visible to be rejected.
+            assert kwargs.get("bucket") is None
+            readings = pd.date_range("2025-06-01", "2025-06-10 23:40", freq="20min", tz=UTC)
+            return pd.DataFrame({"time": readings, "value": 0.2})
 
     field_weather_mod._cache.clear()
     monkeypatch.setattr(field_weather_mod, "OpenMeteoClient", FakeOpenMeteo)
@@ -138,11 +144,15 @@ async def test_load_weather_fuses_actuals_and_marks_the_forecast(monkeypatch):
     field_weather_mod._cache.clear()
 
     assert list(result.actual.columns) == [
-        "rain_mm", "rain_source", "et0_mm", "temperature", "humidity",
+        "rain_mm", "rain_source", "gauge_mm", "open_meteo_mm",
+        "et0_mm", "temperature", "humidity",
     ]
     assert result.actual.index.max() < pd.Timestamp("2025-06-11", tz=UTC)
     assert (result.actual["rain_source"] == STATION).all()
-    assert (result.actual["rain_mm"] == 0.6).all()
+    # Three 0.2 mm readings per hour.
+    assert result.actual["rain_mm"].to_numpy() == pytest.approx(0.6)
+    assert result.actual["gauge_mm"].to_numpy() == pytest.approx(0.6)
+    assert (result.actual["open_meteo_mm"] == 0.5).all()
     assert (result.forecast["rain_source"] == FORECAST).all()
     assert result.forecast.index.min() == pd.Timestamp("2025-06-11", tz=UTC)
 
@@ -166,7 +176,8 @@ async def test_irrigation_page_draws_rain_by_source(monkeypatch):
     fused = fuse(probes, config)
 
     actual = pd.DataFrame({
-        "rain_mm": _reference(), "rain_source": STATION, "et0_mm": 0.2,
+        "rain_mm": _reference(), "rain_source": STATION,
+        "gauge_mm": _reference(), "open_meteo_mm": _reference(), "et0_mm": 0.2,
         "temperature": 15.0, "humidity": 80.0,
     }, index=hours)
     actual.loc["2025-07-01":"2025-07-20", "rain_source"] = OPEN_METEO
@@ -187,6 +198,42 @@ async def test_irrigation_page_draws_rain_by_source(monkeypatch):
         response = await client.get("/irrigation?year=2025")
 
     assert response.status_code == 200
-    assert irrigation.RAIN_LABELS[STATION] in response.text
-    assert irrigation.RAIN_LABELS[OPEN_METEO] in response.text
+    # Both sources are always drawn, and the gauge is split by whether it was used.
+    for key in ("gauge_used", "gauge_unused", "open_meteo"):
+        assert irrigation.RAIN_TRACES[key][0] in response.text
     assert "Reference ET0" in response.text
+
+
+def test_impossible_gauge_hours_are_dropped_not_clipped():
+    params = _config().rain
+    readings = pd.DataFrame({
+        "time": pd.to_datetime([
+            "2024-03-26 08:00", "2024-03-26 08:20",          # a negative reading
+            "2024-03-26 09:00", "2024-03-26 09:20",          # above the hourly maximum
+            "2024-03-26 10:00", "2024-03-26 10:20",          # an ordinary shower
+        ], utc=True),
+        "value": [-0.02, 1.0, params.max_mm_per_hour, 1.0, 1.5, 0.5],
+    })
+
+    hourly = plausible_gauge_hours(readings, params)
+
+    assert np.isnan(hourly.loc[pd.Timestamp("2024-03-26 08:00", tz=UTC)])
+    assert np.isnan(hourly.loc[pd.Timestamp("2024-03-26 09:00", tz=UTC)])
+    assert hourly.loc[pd.Timestamp("2024-03-26 10:00", tz=UTC)] == 2.0
+
+
+def test_open_meteo_sums_move_to_the_start_of_their_hour():
+    """Open-Meteo stamps a sum at the end of its hour, and the gauge stamps the
+    start. Instants such as temperature stay where they are."""
+    hours = pd.date_range("2025-06-01", periods=4, freq="h", tz=UTC)
+    frame = pd.DataFrame({
+        RAIN: [0.0, 3.0, 0.0, 0.0], ET0: [0.1, 0.2, 0.3, 0.4],
+        TEMPERATURE: [10.0, 11.0, 12.0, 13.0],
+    }, index=hours)
+
+    aligned = align_hourly_sums(frame)
+
+    assert aligned[RAIN].tolist()[:3] == [3.0, 0.0, 0.0]
+    assert aligned[ET0].tolist()[:3] == [0.2, 0.3, 0.4]
+    assert np.isnan(aligned[RAIN].iloc[-1])
+    assert aligned[TEMPERATURE].tolist() == frame[TEMPERATURE].tolist()

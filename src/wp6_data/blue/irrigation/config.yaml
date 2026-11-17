@@ -20,6 +20,8 @@ probes:
   - "BV + BT + EC | Nr. 6"
 
 sensor: "soilMoisture"
+# Each probe's own soil temperature, read alongside it for the frozen mask.
+temperature_sensor: "soilTemperature"
 
 # Earliest data used. Normalisation references are taken over everything from
 # here on, so the scale does not move with the window being viewed.
@@ -44,6 +46,9 @@ fusion:
   consensus_window_days: 30
   consensus_min_corr: 0.3
   consensus_min_probes: 3
+  # At or below this soil temperature (°C) the probe may be reading ice, which
+  # looks like dry soil; a thaw then looks like rain. Masked as "frozen".
+  frozen_below_c: 1.0
 
 # Rain at the field. The on-site gauge catches local showers that Open-Meteo's
 # reanalysis underestimates, but it has failed for whole months (research note
@@ -54,6 +59,9 @@ fusion:
 rain:
   station_device: "weatherstation"
   station_sensor: "precipitation"
+  # Gauge hours above this, or with any negative reading, are impossible
+  # (commissioning junk swung ±85 mm on 2024-03-26) and are dropped.
+  max_mm_per_hour: 60.0
   check_window_days: 14
   min_reference_mm: 5.0
   min_ratio: 0.3

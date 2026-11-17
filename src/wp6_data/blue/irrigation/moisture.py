@@ -14,6 +14,9 @@ Mask reasons, applied in this order (the first one wins):
 
 - ``missing``: no reading that hour.
 - ``excluded``: a manual override from the config.
+- ``frozen``: the probe's own soil temperature is near freezing. Ice reads
+  like dry soil to a permittivity probe, so a frost looks like drying and a
+  thaw like rain. Neither is water arriving or leaving.
 - ``dropout``: below the floor, or within the padding of such a run. Drying
   peat shrinks away from the probe, so these are lost contact, not dry soil.
 - ``spike``: a one-off jump that a centred Hampel filter rejects. A rain step
@@ -38,6 +41,7 @@ if TYPE_CHECKING:
 OK = ""
 MISSING = "missing"
 EXCLUDED = "excluded"
+FROZEN = "frozen"
 DROPOUT = "dropout"
 SPIKE = "spike"
 DISAGREES = "disagrees"
@@ -70,8 +74,13 @@ def mask_readings(
     raw: pd.DataFrame,
     params: FusionParams,
     exclusions: tuple[Exclusion, ...] = (),
+    soil_temperature: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Per-hour mask reason for every probe; ``OK`` where the reading is kept."""
+    """Per-hour mask reason for every probe; ``OK`` where the reading is kept.
+
+    *soil_temperature* is the same shape as *raw* (each probe's own
+    temperature). A probe without a temperature reading is not masked as frozen.
+    """
     reasons = pd.DataFrame(OK, index=raw.index, columns=raw.columns)
 
     def mark(condition: pd.DataFrame, reason: str) -> None:
@@ -86,6 +95,10 @@ def mask_readings(
             if e.probe in excluded.columns:
                 excluded.loc[e.start:e.end, e.probe] = True
         mark(excluded, EXCLUDED)
+
+    if soil_temperature is not None:
+        temperature = soil_temperature.reindex(index=raw.index, columns=raw.columns)
+        mark(temperature < params.frozen_below_c, FROZEN)
 
     below = (raw < params.floor).astype(float)
     pad = 2 * params.dropout_pad_hours + 1
@@ -156,10 +169,14 @@ def mask_disagreement(
     return reasons
 
 
-def fuse(raw: pd.DataFrame, config: IrrigationConfig) -> FusedMoisture:
+def fuse(
+    raw: pd.DataFrame,
+    config: IrrigationConfig,
+    soil_temperature: pd.DataFrame | None = None,
+) -> FusedMoisture:
     """Mask, scale and fuse an hourly wide frame (one column per probe)."""
     params = config.fusion
-    reasons = mask_readings(raw, params, config.exclude)
+    reasons = mask_readings(raw, params, config.exclude, soil_temperature)
     refs = references(raw, reasons, params)
     scaled = scale(raw, refs)
     reasons = mask_disagreement(scaled, reasons, params)
@@ -200,7 +217,7 @@ def quality_table(result: FusedMoisture, start: datetime, end: datetime) -> pd.D
             "share": round(used[probe] / total_used, 2) if total_used else 0.0,
         })
     table = pd.DataFrame(rows).set_index("probe").fillna(0)
-    reason_cols = [r for r in (MISSING, EXCLUDED, DROPOUT, SPIKE, DISAGREES) if r in table]
+    reason_cols = [r for r in (MISSING, EXCLUDED, FROZEN, DROPOUT, SPIKE, DISAGREES) if r in table]
     return table[["used_h", *reason_cols, "dry_ref", "wet_ref", "share"]]
 
 
@@ -237,14 +254,20 @@ async def load_fused(
     """
     start = datetime.combine(config.history_start, datetime.min.time()).replace(tzinfo=now.tzinfo)
     hours = int((now - start) / timedelta(hours=1)) + 1
+    sensors = [config.sensor, config.temperature_sensor]
     readings = await provider.fetch_data(
-        sensor_tags=[config.sensor],
+        sensor_tags=sensors,
         device_names=list(config.probes),
         start=start,
         end=now,
         bucket=timedelta(hours=1),
         agg="avg",
-        # One hourly row per probe; the limit must cover all of them.
-        limit=hours * len(config.probes),
+        # One hourly row per probe and sensor; the limit must cover all of them.
+        limit=hours * len(config.probes) * len(sensors),
     )
-    return fuse(to_hourly_frame(readings, config.probes, start, now), config)
+
+    def frame(sensor: str) -> pd.DataFrame:
+        rows = readings[readings["sensor"] == sensor] if not readings.empty else readings
+        return to_hourly_frame(rows, config.probes, start, now)
+
+    return fuse(frame(config.sensor), config, soil_temperature=frame(config.temperature_sensor))

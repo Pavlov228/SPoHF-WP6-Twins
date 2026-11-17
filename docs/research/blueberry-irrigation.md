@@ -212,6 +212,36 @@ which drying stalls (§4.3), sits at the low end of the normalised scale. Treat
 it as the stress onset, and set the trigger with a margin above it. Revisit
 once the event log is confirmed.
 
+### 4.6 Rain vs soil response (checked 2026-11-17)
+
+- **Gauge and Open-Meteo agree where the gauge is healthy.** Mar–Nov 2025:
+  daily correlation 0.89, totals 435 vs 484 mm. Only 1 day had gauge rain and
+  no Open-Meteo rain; 10 days the reverse. Open-Meteo stamps hourly sums at the
+  **end** of the hour and the gauge at the start, so Open-Meteo rain and ET0 are
+  moved back an hour (the cross-correlation then peaks at lag 0).
+- **Of 113 sharp rises in fused soil moisture, 104 are explained by the rain the
+  twin uses.** 19 of those are only explained because Open-Meteo stood in for a
+  failing gauge. The soil probes act as a third rain gauge.
+- The rest:
+  - **Thaws (Jan 2026).** The soil was at 0 °C. Ice reads like dry soil to a
+    permittivity probe, so a thaw looks like rain, and snow only reaches a rain
+    gauge once it melts. These hours are now masked as `frozen`
+    (soil temperature ≤ 1 °C).
+  - **The gauge under-reading briefly** (late Nov–Dec 2024, 2 Jun 2026):
+    Open-Meteo had 3–6 mm, but not for long enough for the 14-day check to
+    switch over.
+  - **Coverage collapse (15 and 17 May 2025).** All probes went silent for about
+    a day, and the few that came back were noisy. A median over a changing
+    handful of probes jumps without any water. → **The model must weight or
+    skip low-coverage hours.**
+  - Probe start-up (8 May 2024).
+- **Gauge data quality:**
+  - Commissioning junk on 2024-03-26 (readings of ±85 mm). Hours with a
+    negative reading or more than 60 mm are now dropped.
+  - Probe `03` reported −3.7 °C in Nov 2026 while every other probe stayed
+    above 1.3 °C and the air never went below 0 °C. That is a fault, which the
+    `frozen` mask happens to catch.
+
 ## 5. Model inputs from the literature
 
 - **Crop coefficient (Kc).** The literature has no clean FAO-56 value for

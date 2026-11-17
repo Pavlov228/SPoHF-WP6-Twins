@@ -22,6 +22,7 @@ from wp6_data.blue.irrigation.moisture import (
     DISAGREES,
     DROPOUT,
     EXCLUDED,
+    FROZEN,
     MISSING,
     OK,
     SPIKE,
@@ -234,6 +235,7 @@ async def test_irrigation_page_renders_the_fused_stream(monkeypatch):
     probes = _probes(truth)
     rows = probes.stack().rename("value").reset_index()
     rows.columns = ["time", "device", "value"]
+    rows["sensor"] = _config().sensor
 
     class FakeProvider:
         async def fetch_data(self, **kwargs):
@@ -282,3 +284,22 @@ def test_spread_band_never_bridges_a_gap():
     assert second == [*index[5:], *index[5:][::-1]]
     assert ys[breaks[0]] is None
     assert np.allclose(ys[:3], high.iloc[:3]) and np.allclose(ys[3:6], low.iloc[:3][::-1])
+
+
+def test_a_frozen_probe_is_masked_so_a_thaw_does_not_read_as_rain():
+    config = _config()
+    truth = _truth()
+    raw = _probes(truth)
+    frost = slice("2025-05-01", "2025-05-04")
+    # Ice reads like dry soil: during the frost every probe "dries" sharply.
+    raw.loc[frost] = raw.loc[frost] * 0.3
+    temperature = pd.DataFrame(10.0, index=raw.index, columns=raw.columns)
+    temperature.loc[frost] = config.fusion.frozen_below_c - 1.0
+    # A probe with no temperature reading is not presumed frozen.
+    temperature.loc[frost, "p-e"] = np.nan
+
+    result = fuse(raw, config, soil_temperature=temperature)
+
+    assert (result.reasons.loc[frost, ["p-a", "p-b", "p-c", "p-d"]] == FROZEN).all().all()
+    assert (result.reasons.loc[frost, "p-e"] != FROZEN).all()
+    assert (result.coverage.loc[frost] <= 1).all()
