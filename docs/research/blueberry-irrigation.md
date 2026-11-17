@@ -9,9 +9,9 @@ the simulator rest on, and it records where each number comes from.
 ## Setting
 
 - Highbush blueberry (*Vaccinium corymbosum*), **young**: first fruit in 2024.
-- Grown in **large square pots of peat substrate**, about 1–2 m apart, drip fertigated, **outdoors**.
-- **The pots are buried in a bed of soil, and the roots have grown out of the pots into the bed.** The root zone is therefore pot plus bed, not a closed container.
-- **The moisture sensors sit inside the pots**, in the substrate the drip wets. The bed is unmeasured: a buffer that takes up drainage and can feed water back by capillary rise.
+- Grown in **peat substrate set into a soil bed**, about 1–2 m apart, drip fertigated, **outdoors**.
+- **The roots have grown out of the peat into the surrounding bed.** The root zone is therefore peat plus bed, not a closed volume.
+- **The soil probes sit in the peat**, the substrate the drip wets. The bed is unmeasured: a buffer that takes up drainage and can feed water back by capillary rise.
 - In 2025 the farm watered on **11 days**, from 29 Apr to 2 Oct. Every treatment
   got the same dose on the same day, starting at 1333 ml/plant (10 min) and
   rising to 2400 ml/plant (18 min), a fixed rate of about 133 ml/min/plant. Rain
@@ -27,7 +27,7 @@ The literature gives no single, universal threshold. What it does agree on:
 | Context | Finding | Source |
 |---|---|---|
 | Field, loam + 30 % peat | Growth and productivity peak at **−4 to −8 kPa**. Irrigate before **−15 kPa**. | [FAO Agris record](https://agris.fao.org/search/fr/records/647369bae17b74d22254f64b) |
-| Peat/coir/perlite substrate (pots) | Best growth with irrigation triggered at **−2 kPa** (single pulses) | [ASHS 2025](https://ashs2025.sched.com/event/247yQ/vsf-1-drip-irrigation-strategies-for-improved-blueberry-production-in-substrate), [ISHS 1440_40](https://ishs.org/ishs-article/1440_40/) (abstract only) |
+| Peat/coir/perlite substrate (containers) | Best growth with irrigation triggered at **−2 kPa** (single pulses) | [ASHS 2025](https://ashs2025.sched.com/event/247yQ/vsf-1-drip-irrigation-strategies-for-improved-blueberry-production-in-substrate), [ISHS 1440_40](https://ishs.org/ishs-article/1440_40/) (abstract only) |
 | Sandy soils, extension | Set point **10–15 kPa** | [UGA](https://site.caes.uga.edu/blueberry/?p=639) |
 | Grower guide | Never let the soil go drier than **30–40 kPa** | [Rivulis](https://www.rivulis.com/expert-guide-to-growing-blueberries-in-soil/) |
 
@@ -47,7 +47,7 @@ The literature gives no single, universal threshold. What it does agree on:
 - After-effects were small, except for stress during **flower-bud induction**
   (late summer), which carries over into the next season's crop.
 
-**Pots in a soil bed.** The sensors read the pot substrate, so the substrate rows above apply most directly, though the bed softens the drying. Container trials trigger irrigation much wetter (**−2 to −4 kPa**) than field soil (−10 to −15 kPa). A pot holds a small reservoir with free drainage at the bottom, so it dries quickly and has no deeper soil to draw on.
+**Peat in a soil bed.** The probes read the peat substrate, so the substrate rows above apply most directly, though the bed softens the drying. Substrate trials trigger irrigation much wetter (**−2 to −4 kPa**) than field soil (−10 to −15 kPa). A small peat volume is a small reservoir that dries quickly; here the bed adds some reach.
 
 **Working rule for the twin (to validate against the data in §4):**
 - Keep the substrate wetter than about −4 kPa (container range). The trigger in practice comes from the empirical band.
@@ -112,13 +112,13 @@ These numbers come from throwaway scripts, not shipped. Sources:
 - Weather: the Open-Meteo archive at blue's configured coordinates.
 - Waterings: the prod fertigation CSV.
 
-### 4.1 The logged waterings barely show in the pot sensors
+### 4.1 The logged waterings barely show in the soil probes
 
 For each of the 11 logged days, I took the biggest 3-hour rise per sensor
 between day −2 and day +3.
 
 - **On rain-free event days the rise is at most 0.6 %VWC.** A 1.3–2.4 L dose
-  should be clearly visible in a pot.
+  should be clearly visible in the root zone.
 - **Every large rise in the event windows coincides with rain** (5–10 mm).
 - There are a few jumps of 1.5–5 %VWC, with two or more sensors rising together,
   on days that look nearly rain-free in Open-Meteo: 2025-05-31, 08-23, 08-28,
@@ -129,11 +129,11 @@ between day −2 and day +3.
 
 **Reading (confirmed with the farm 2026-11-17):**
 - The CSV **is** the actual watering log.
-- The probes are in the same pot as the drippers but **not next to them**, and
-  each pot has several drip points.
+- The probes are in the same peat as the drippers but **not next to them**, and
+  each plant has several drip points.
 - So a 1.3–2.4 L drip dose wets bulbs the probes don't see. The water drains
-  locally and quickly into the pot bottom and the bed, while rain wets the
-  whole pot surface, probes included.
+  locally and quickly down into the bed, while rain wets the whole surface,
+  probes included.
 
 **Consequences for the model:**
 - **Irrigation can't be calibrated from steps in the sensor data.** The
@@ -143,7 +143,7 @@ between day −2 and day +3.
   after an event, and needs a tight prior.
 - **Drip and rain enter the bucket differently.** The bake-off must keep them
   as separate inputs, each with its own effectiveness parameter.
-- **The probes behave like a "bulk pot" signal**, not a dripper-bulb signal.
+- **The probes behave like a "bulk root-zone" signal**, not a dripper-bulb signal.
   This is a caveat for advice: the plant's roots near the drippers are wetter
   than the probes report.
 
@@ -201,7 +201,7 @@ Rain- and watering-free stretches of 5 days or more, as the slope per sensor:
 
 The two years are nearly identical in weather. With a young-plant Kc of about
 0.3–0.5, crop demand beyond rain is on the order of 100–150 mm over the season.
-That is worth comparing against the logged doses once pot or bed area is known.
+That is worth comparing against the logged doses once the root-zone or bed area is known.
 
 ### 4.5 Empirical band (provisional)
 
@@ -252,8 +252,8 @@ once the event log is confirmed.
   ([lysimeter Kc](https://agris.fao.org/search/en/records/65dfd59d4c5aef494fe5dcb8),
   [ASHS 2025 Oregon](https://ashs2025.sched.com/event/247yK/vsf-1-water-requirements-for-establishing-a-new-planting-of-northern-highbush-blueberry-in-western-oregon)).
   **Our plants are young**, so Kc starts low (about 0.1–0.4, rising through the season and year on year). **Kc is fitted, with the literature value as the prior.**
-- **Root zone = the measured pot plus an unmeasured bed.** The pot volume is only a lower bound. The **effective** water-holding capacity is fitted from the data: the jump per ml dose, and the dry-down rate. Water moves between pot and bed through a fitted exchange term (drainage out when wet, capillary return when dry), instead of free drainage. The bake-off compares a single "leaky" bucket with a two-bucket pot+bed model.
-- **Units.** Drip is given in ml/pot. Rain reaches the pot directly and through the bed around it, so the **rain-catch fraction is fitted**, not derived from geometry. Pot dimensions are a prior, not required.
+- **Root zone = the measured peat plus an unmeasured bed.** The peat volume is only a lower bound. The **effective** water-holding capacity is fitted from the data: the jump per ml dose, and the dry-down rate. Water moves between peat and bed through a fitted exchange term (drainage out when wet, capillary return when dry), instead of free drainage. The bake-off compares a single "leaky" bucket with a two-bucket root-zone+bed model.
+- **Units.** Drip is given in ml/plant. Rain reaches the root zone directly and through the bed around it, so the **rain-catch fraction is fitted**, not derived from geometry. Peat dimensions are a prior, not required.
 - **ET0** comes from Open-Meteo `et0_fao_evapotranspiration` (FAO-56 Penman-Monteith).
 - **Rain: the on-site gauge is better when healthy, but not reliable on its own.**
   - In Apr–Oct 2025 its monthly totals match Open-Meteo within about 10 %
@@ -281,6 +281,6 @@ once the event log is confirmed.
 - Were there waterings in 2026? 2026 is the best-instrumented season but has no CSV yet.
 - Can the farm check or clean the rain gauge? It has under-read since about Dec 2025.
 - Sensor installation depth, and distance to the dripper.
-- Pot volume (optional prior). The effective capacity is fitted.
+- Peat volume per plant (optional prior). The effective capacity is fitted.
 - Cultivar. (Planting age: young, first fruit 2024.)
-- Does canopy overhang shade the pot surface or block rain from it? This lowers the rain the pot catches.
+- Does canopy overhang block rain from the root zone? This lowers the rain it catches.
