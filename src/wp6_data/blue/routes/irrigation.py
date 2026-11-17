@@ -107,7 +107,8 @@ def current_outlook(
     try:
         config = load_config()
         frame = daily_frame(result, weather, events, config.watering.timezone)
-        return outlook(frame, load_model(), datetime.now(UTC).date())
+        return outlook(frame, load_model(), datetime.now(UTC).date(),
+                       config.advice.soil_temp_window_days)
     except Exception:
         log.warning("irrigation_outlook_failed", exc_info=True)
         return None
@@ -185,12 +186,21 @@ def _advice_card(advice: Advice | None) -> str:
         )
     lv = advice.levels
     depletion = 1 - lv.trigger / lv.field_capacity
+    soil = (f" Soil {advice.activity.soil_temp_c:.0f} °C."
+            if advice.activity.soil_temp_c is not None else "")
     context = (
         f"<small>Next 7 days: {advice.rain_forecast_mm:.0f} mm rain forecast, crop uses "
-        f"about {advice.crop_use_mm:.0f} mm. Trigger {lv.trigger:.2f} "
+        f"about {advice.crop_use_mm:.0f} mm.{soil} Trigger {lv.trigger:.2f} "
         f"({depletion:.0%} of the available water used), target {lv.target:.2f}.</small>"
     )
-    if not advice.needed:
+    act = advice.activity
+    if not act.active:
+        body = (
+            f"<p><strong>No watering advised: the crop isn't active.</strong> "
+            f"{act.reason[0].upper() + act.reason[1:]}. A low reading now doesn't mean a "
+            f"thirsty plant.</p>"
+        )
+    elif not advice.needed:
         maybe = (
             f" If the weather turns out drier, it could get there by "
             f"<strong>{advice.possibly_on:%a %d %b}</strong>."

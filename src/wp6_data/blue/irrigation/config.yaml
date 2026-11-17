@@ -94,6 +94,16 @@ advice:
   target_margin: 0.07
   # When to water: early morning, before the day's demand peaks (note §3).
   preferred_local_time: "06:00"
+  # Only advise watering while the crop is active (research note §9). Both must hold:
+  # - soil warm enough for roots to work: OSU extension, blueberry root growth
+  #   starts at about 13 °C (55 °F) soil temperature;
+  min_soil_temp_c: 12.0
+  soil_temp_window_days: 7
+  # - real demand: the crop's *potential* water use (ET0 × crop factor, before
+  #   any drought stress), mean over the outlook. Potential, not actual: a soil
+  #   too dry to evaporate much is a plant in need, not a dormant one.
+  #   2025: June 4.6, September 1.6, October 0.6 mm/day.
+  min_crop_use_mm_per_day: 1.0
 
 # Manual override for a fault the mechanical checks miss. Prefer improving a
 # check over adding an entry here. Entries: {probe, start, end, reason}.

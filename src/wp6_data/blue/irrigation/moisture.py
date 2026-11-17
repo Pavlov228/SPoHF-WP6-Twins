@@ -71,6 +71,8 @@ class FusedMoisture:
     #: Per-probe hourly readings as received, in the probe's own unit, so every
     #: reading (used or dropped) stays inspectable.
     raw: pd.DataFrame
+    #: Per-probe hourly soil temperature (°C), when it was loaded.
+    soil_temperature: pd.DataFrame | None = None
 
 
 def mask_readings(
@@ -197,6 +199,7 @@ def fuse(
         reasons=reasons,
         references=refs,
         raw=raw,
+        soil_temperature=soil_temperature,
     )
 
 

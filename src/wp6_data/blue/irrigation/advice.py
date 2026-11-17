@@ -8,7 +8,9 @@ after it. On that outlook:
   some day, morning or evening) with the shipped model and its band.
 - :func:`advise` answers "when, and how much?". *When* is the first morning the
   no-watering path falls below the trigger. *How much* is the dose that brings
-  that day back to the target.
+  that day back to the target. Advice is only given while the crop is
+  **active** (:func:`activity`): soil warm enough for roots to work, and real
+  water demand ahead. A low reading in autumn is not a thirsty plant.
 
 Levels live on the fused 0–1 scale, anchored on the model's fitted field
 capacity ``s_fc``:
@@ -51,6 +53,8 @@ class Outlook:
     s0: float
     days: pd.DatetimeIndex     # origin + 1 .. origin + H
     inputs: Inputs             # (H + 1, 1)
+    #: Mean soil temperature over the days up to the origin (°C), if measured.
+    soil_temp_c: float | None = None
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,9 @@ def levels(model: ShippedModel, config: IrrigationConfig) -> Levels:
     )
 
 
-def outlook(frame: pd.DataFrame, model: ShippedModel, today: date) -> Outlook | None:
+def outlook(
+    frame: pd.DataFrame, model: ShippedModel, today: date, soil_temp_window_days: int = 7,
+) -> Outlook | None:
     """The outlook from the last reading, or None if there isn't a fresh one or no weather."""
     readings = frame["s"].loc[:pd.Timestamp(today)].dropna()
     if readings.empty or (pd.Timestamp(today) - readings.index[-1]).days > MAX_READING_AGE_DAYS:
@@ -83,9 +89,14 @@ def outlook(frame: pd.DataFrame, model: ShippedModel, today: date) -> Outlook | 
     def column(name: str) -> np.ndarray:
         return drivers[name].fillna(0.0).to_numpy(dtype=float)[:, None]
 
+    recent_temp = (
+        frame["soil_temp_c"].loc[origin - pd.Timedelta(days=soil_temp_window_days - 1):origin]
+        if "soil_temp_c" in frame else pd.Series(dtype=float)
+    ).dropna()
     return Outlook(
         origin=origin,
         s0=float(readings.iloc[-1]),
+        soil_temp_c=float(recent_temp.mean()) if not recent_temp.empty else None,
         days=window[1:],
         inputs=Inputs(
             rain=column("rain_mm"), et0=column("et0_mm"),
@@ -154,6 +165,53 @@ def crop_use_mm(o: Outlook, model: ShippedModel, config: IrrigationConfig) -> fl
 
 
 @dataclass(frozen=True)
+class Activity:
+    """Whether the crop is active enough for watering to matter, and why not."""
+
+    active: bool
+    reason: str | None           # why advice is withheld, for the card
+    soil_temp_c: float | None
+    crop_use_mm_per_day: float
+
+
+def potential_demand_mm(o: Outlook, model: ShippedModel) -> float:
+    """The crop's water demand over the outlook *before* drought stress, mm/day.
+
+    ET0 × the seasonal crop factor, in rain-equivalent mm. Unlike
+    :func:`crop_use_mm`, it doesn't shrink as the soil dries, so a drought can't
+    make a thirsty crop look dormant.
+    """
+    p = model.params
+    kc = np.clip(1.0 + p["kc_slope"] * (o.inputs.doy[1:, 0] - KC_PIVOT_DOY) / 100.0, 0.05, None)
+    return float(np.mean(p["et_scale"] * kc * o.inputs.et0[1:, 0]) / p["rain_eff"])
+
+
+def activity(o: Outlook, model: ShippedModel, config: IrrigationConfig) -> Activity:
+    """Both gates from the config: soil warm enough, and real demand ahead.
+
+    A missing soil temperature doesn't block advice. The demand gate still
+    holds, and an unknown isn't evidence of dormancy.
+    """
+    a = config.advice
+    use = potential_demand_mm(o, model)
+    reasons = []
+    if o.soil_temp_c is not None and o.soil_temp_c < a.min_soil_temp_c:
+        reasons.append(
+            f"the soil is {o.soil_temp_c:.0f} °C, below the {a.min_soil_temp_c:g} °C at "
+            f"which blueberry roots are active",
+        )
+    if use < a.min_crop_use_mm_per_day:
+        reasons.append(
+            f"the crop's water demand is only {use:.1f} mm/day, below "
+            f"{a.min_crop_use_mm_per_day:g} mm/day",
+        )
+    return Activity(
+        active=not reasons, reason=" and ".join(reasons) or None,
+        soil_temp_c=o.soil_temp_c, crop_use_mm_per_day=use,
+    )
+
+
+@dataclass(frozen=True)
 class Advice:
     """What to do, and the numbers behind it."""
 
@@ -168,6 +226,7 @@ class Advice:
     rain_forecast_mm: float
     crop_use_mm: float
     area_per_plant_m2: float
+    activity: Activity
 
 
 def advise(o: Outlook, model: ShippedModel, config: IrrigationConfig) -> Advice:
@@ -182,12 +241,14 @@ def advise(o: Outlook, model: ShippedModel, config: IrrigationConfig) -> Advice:
     rain = float(o.inputs.rain[1:, 0].sum())
     use = crop_use_mm(o, model, config)
     area = model.area_per_plant_m2
-    if crossing is None:
+    act = activity(o, model, config)
+    if crossing is None or not act.active:
         return Advice(
             needed=False, water_on=None, water_at=config.advice.preferred_local_time,
             dose_mm=0.0, dose_l_per_plant=0.0, crossing_day=None,
             possibly_on=possibly[0].date() if len(possibly) else None,
             levels=lv, rain_forecast_mm=rain, crop_use_mm=use, area_per_plant_m2=area,
+            activity=act,
         )
     # Refill the level the no-watering path would have on the day of watering.
     deficit = max(lv.target - float(path["mean"].loc[crossing]), 0.0)
@@ -197,6 +258,7 @@ def advise(o: Outlook, model: ShippedModel, config: IrrigationConfig) -> Advice:
         dose_mm=dose_mm, dose_l_per_plant=dose_mm * area, crossing_day=crossing.date(),
         possibly_on=possibly[0].date() if len(possibly) else None,
         levels=lv, rain_forecast_mm=rain, crop_use_mm=use, area_per_plant_m2=area,
+        activity=act,
     )
 
 

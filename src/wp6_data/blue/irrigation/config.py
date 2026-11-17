@@ -67,6 +67,9 @@ class AdviceParams(_Strict):
     allowable_depletion: float
     target_margin: float
     preferred_local_time: time
+    min_soil_temp_c: float
+    soil_temp_window_days: int
+    min_crop_use_mm_per_day: float
 
     @model_validator(mode="after")
     def _fraction(self) -> AdviceParams:

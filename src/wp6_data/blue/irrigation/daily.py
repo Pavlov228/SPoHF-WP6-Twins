@@ -9,6 +9,9 @@ Models step one day at a time (the FAO-56 resolution), on:
 - ``rain_mm``, ``et0_mm``: daily sums of the fused rain and Open-Meteo ET0.
 - ``irrigation_l``: drip dose that day, litres per plant.
 - ``coverage``: mean probes used per hour, for weighting and inspection.
+- ``soil_temp_c``: daily mean of the hourly *median* soil temperature across
+  probes. A median, so one faulty probe can't move it (``03`` reported −3.7 °C
+  in Nov 2026 while the others stayed above 1.3 °C).
 
 The day is the field's local calendar day, so an evening watering and the night
 after it fall on the dates the farm would name.
@@ -25,7 +28,7 @@ if TYPE_CHECKING:
     from wp6_data.blue.irrigation.weather import IrrigationWeather
 
 #: Columns of :func:`daily_frame`.
-DAILY_COLUMNS = ["s", "rain_mm", "et0_mm", "irrigation_l", "coverage"]
+DAILY_COLUMNS = ["s", "rain_mm", "et0_mm", "irrigation_l", "coverage", "soil_temp_c"]
 
 #: A day's soil moisture needs at least this many probes per hour on average...
 MIN_PROBES = 3
@@ -63,6 +66,12 @@ def daily_frame(
             _local_day(events.index, timezone),
         ).sum()
 
+    if fused.soil_temperature is not None:
+        hourly_t = fused.soil_temperature.median(axis=1)
+        soil_temp = hourly_t.groupby(_local_day(hourly_t.index, timezone)).mean()
+    else:
+        soil_temp = pd.Series(dtype=float)
+
     days = s.index.union(rain.index)
     frame = pd.DataFrame({
         "s": s.reindex(days),
@@ -70,6 +79,7 @@ def daily_frame(
         "et0_mm": et0.reindex(days),
         "irrigation_l": irrigation.reindex(days).fillna(0.0),
         "coverage": coverage.reindex(days),
+        "soil_temp_c": soil_temp.reindex(days),
     })
     frame.index = pd.DatetimeIndex(frame.index, name="day")
     return frame[DAILY_COLUMNS]

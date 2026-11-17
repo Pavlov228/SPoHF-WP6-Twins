@@ -156,6 +156,7 @@ async def test_simulator_page_runs_a_what_if(monkeypatch):
     monkeypatch.setattr(sim, "irrigation_weather", loaded)
     monkeypatch.setattr(sim, "irrigation_events", loaded)
     monkeypatch.setattr(sim, "current_outlook", lambda *_: base)
+    monkeypatch.setattr(sim, "daily_frame", lambda *_: _frame(0.55))
 
     app = FastAPI()
     app.include_router(sim.router)
@@ -170,3 +171,4 @@ async def test_simulator_page_runs_a_what_if(monkeypatch):
     assert "What-if" in response.text
     assert "No watering" in response.text
     assert 'value="50"' in response.text  # the form keeps the chosen rain %
+    assert "Season replay" in response.text

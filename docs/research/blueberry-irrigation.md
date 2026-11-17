@@ -387,3 +387,63 @@ capacity → dry limit) that may be used up before watering.
 delayed, a dose on a chosen day, morning or evening. The model is daily, so the
 time of day only decides which day a dose counts (an evening dose counts the
 next day).
+
+## 9. When the crop is active (decided 2026-11-17)
+
+A reading below the trigger in autumn is not a thirsty plant: water use
+collapses as the season ends (2025 potential crop demand: June 4.6, September
+1.6, October 0.6, November 0.3 mm/day). Advice, and the replay's advice rule,
+apply only while **both** hold:
+
+- **The soil is warm enough for roots to work: the 7-day mean is at least 12 °C.**
+  Oregon State extension puts the start of blueberry root growth at about 13 °C
+  (55 °F) soil temperature, with growth continuing into early November. Root
+  production peaks in late May and again in **September, about a month before
+  dormancy** ([OSU](https://extension.oregonstate.edu/crop-production/berries/how-blueberry-plants-develop-grow),
+  [ISHS 1180_23](https://ishs.org/ishs-article/1180_23/)). So September
+  watering still matters. The probes' median soil temperature is used, since
+  it is robust to one faulty probe.
+- **There is real demand: the mean *potential* crop water use (ET0 × Kc, before
+  drought stress) over the coming week is at least 1 mm/day.** Potential, not
+  actual use: in a drought, actual use drops because the soil is dry, and
+  gating on it would hide exactly the plants that need water.
+
+Rejected: **GDD**. It keeps accumulating through autumn (2025: 2,240 by the end
+of September, 2,611 by the end of the year), so it can't mark the end of the
+season. Also rejected: a seasonal (deeper) autumn trigger, which hard-codes a
+calendar the plants don't follow.
+
+Result: the active season was 6 Apr – 29 Sep 2025 and 13 Apr – 2 Oct 2026. In the
+2025 replay, the advice rule's 16 October watering disappears and the
+June–July ones remain.
+
+## 10. Season replay (issue 072)
+
+`/irrigation/simulator` has a "Season replay" section. It runs a past season
+under four policies: as logged, no watering, the advice rule (optionally capped
+per watering), and a fixed schedule.
+
+**Anchoring.** An open-loop replay drifts: the as-logged replay was off by 0.10
+on average in 2025 and by 0.26 in 2026, peaking at 0.51 in September. So a
+policy is anchored to the measurements, and the model only predicts the policy's
+*one-day* difference from what really happened, at the real soil level:
+
+    policy(t+1) = measured(t+1) + [step(policy(t), policy dose) − step(measured(t), logged dose)]
+
+"As logged" then reproduces the measurements exactly. An additive offset over
+the whole season was tried first. It blew up in 2026 (4,445 L, 1,890 mm drained),
+because the model's own state sat far above the measured soil, so drainage and
+ET were computed at the wrong level.
+
+**2025 replay** (stress counted only while the crop is active):
+
+| Policy | Water (L/plant) | Days below trigger | Longest run |
+|---|---|---|---|
+| As logged | 21 | 46 | 33 |
+| No watering | 0 | 52 | 37 |
+| Advice rule | 197 | 3 | 1 |
+| Fixed, 2.4 L every 10 days | 50 | 45 | 33 |
+
+The farm's doses bought about 6 fewer stress days than not watering. Keeping the
+soil above the trigger takes roughly ten times the water, at the dose prior
+(ADR 0009). The 2026 log will test whether that prior is right.
