@@ -50,3 +50,5 @@ Ks(S) out, drainage above field capacity.
   error adds to them.
 - The backtest harness stays in the repo, so the choice can be re-run when the
   2026 watering log arrives.
+- Every assumption, with how to test it, is listed in
+  `blue/irrigation/assumptions.yaml` and shown on `/irrigation/model`.

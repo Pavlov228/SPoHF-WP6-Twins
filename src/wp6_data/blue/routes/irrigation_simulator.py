@@ -326,7 +326,8 @@ async def irrigation_simulator(
         f"drains. One litre per plant counts as 1 mm of rain over "
         f"{model.area_per_plant_m2:g} m², because the probes don't see drip (ADR 0009). The "
         f"model works per day, so the time of day only decides which day a dose counts: "
-        f"morning on that day, evening on the next.</small></p>"
+        f"morning on that day, evening on the next. All assumptions: "
+        '<a href="/irrigation/model">model &amp; assumptions</a>.</small></p>'
     )
     body = (
         "<h1>Irrigation simulator</h1>"

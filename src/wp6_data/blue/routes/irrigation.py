@@ -186,7 +186,11 @@ def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datet
 
 def _advice_card(advice: Advice | None) -> str:
     """When and how much, from the 7-day outlook, with a link to the what-ifs."""
-    link = '<a href="/irrigation/simulator" role="button" class="outline">What if…?</a>'
+    link = (
+        '<a href="/irrigation/simulator" role="button" class="outline">What if…?</a> '
+        '<a href="/irrigation/model" role="button" class="secondary outline">'
+        "Model &amp; assumptions</a>"
+    )
     if advice is None:
         return render_card(
             "Watering advice",
@@ -227,7 +231,8 @@ def _advice_card(advice: Advice | None) -> str:
             f"<p>To bring it back to the target: about <strong>{advice.dose_mm:.0f} mm"
             f"</strong>, which is <strong>{advice.dose_l_per_plant:.0f} L per plant</strong> "
             f"if a litre spreads over {advice.area_per_plant_m2:g} m² per plant. The probes "
-            f"don't see drip, so treat the litres as an estimate.</p>"
+            f"don't see drip, so treat the litres as an estimate "
+            '(<a href="/irrigation/model#dose-area">assumption</a>).</p>'
         )
     return render_card("Watering advice", body + context + f"<p>{link}</p>")
 

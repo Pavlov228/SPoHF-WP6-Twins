@@ -1,0 +1,211 @@
+# Assumptions the blue irrigation twin rests on. This is the single register,
+# rendered on /irrigation/model.
+#
+# Values are not written here. `value` points at where the number really lives,
+# so this file can't go stale:
+#   config.<path>   → blue/irrigation/config.yaml
+#   model.<path>    → blue/irrigation/model.yaml (fitted; ADR 0009)
+#   levels.<name>   → derived from the two (advice.levels)
+#   (none)          → a structural assumption with no single number
+# `unit` is printed after the value. `refs` point into
+# docs/research/blueberry-irrigation.md and docs/adr/.
+
+- id: dose-area
+  title: A litre of drip spreads over a fixed area per plant
+  statement: >
+    One litre per plant counts as one millimetre of rain over this area. It
+    converts doses (L/plant) to and from the model's rain-equivalent depth.
+  value: model.area_per_plant_m2
+  unit: "m² per plant"
+  basis: >
+    The probes sit away from the drippers, so the drip effect can't be measured
+    directly; most monthly refits fitted it as zero. The value is the ratio
+    rain_eff / irr_eff from the fit on all data (research note §7), which is
+    consistent with a plant every 1–2 m (1–4 m²).
+  impact: >
+    The advised litres scale with it. If drip wets a much smaller zone where
+    the active roots are (say 0.2 m²), a litre does ~10× more than assumed, and
+    the advice over-doses by about that factor.
+  test: >
+    The 2026 watering log: compare the measured response after each logged
+    dose with the model's. Better still, put one probe next to a dripper.
+  refs: [§4.1, §7, ADR 0009]
+
+- id: relative-scale
+  title: Soil moisture is relative, not %VWC
+  statement: >
+    Each probe is put on its own 0–1 scale (its dry and wet references), and
+    the fused value is the median. Absolute %VWC is not used.
+  value: config.fusion.reference_high_quantile
+  unit: "quantile used as a probe's wet reference"
+  basis: >
+    The probes read 15–35 %VWC on peat that holds 50–70 % at field capacity,
+    which points at a mineral-soil calibration. Their level offsets (~10 %VWC)
+    are not real differences; how they change over time is.
+  impact: >
+    Thresholds can't be read straight from the literature (kPa, %VWC). They
+    have to be set through allowable depletion on this scale.
+  test: A tensiometer, or a peat-calibrated probe, at one plant.
+  refs: [§2, §4.2]
+
+- id: dry-limit
+  title: The driest reading on record is the dry limit
+  statement: >
+    0 on the scale (the driest clean reading, July 2026) is taken as the
+    bottom of the plant-available water when computing the trigger.
+  value: levels.field_capacity
+  unit: "field capacity on the scale (fitted); the dry limit is 0"
+  basis: >
+    With no retention curve, the deepest observed drought is the best
+    available proxy for the lower limit.
+  impact: >
+    If the real limit lies lower, the trigger allows more depletion than
+    intended. If it lies higher, the trigger fires too late.
+  test: Plant stress observations (wilting, stem water potential) at low readings.
+  refs: [§8]
+
+- id: trigger
+  title: Water when a third of the available water is used
+  statement: >
+    The trigger is field capacity × (1 − allowable depletion). The live
+    advice and the simulator use it.
+  value: config.advice.allowable_depletion
+  unit: "allowable depletion"
+  basis: >
+    Literature runs from 25 % (substrate trials, maximum growth) to 50 %
+    (MSU extension default, "not studied adequately"). The chosen value puts
+    the trigger at the farm's median soil level when it watered in 2025.
+  impact: >
+    Lower → waters earlier and more often. Higher → risks stress in the
+    sensitive fruit-growth window.
+  test: The 2026 log and yield data against the stress days per season.
+  refs: [§1, §8]
+
+- id: target
+  title: Refill to just below field capacity
+  statement: >
+    A dose refills to field capacity minus this margin. Above field capacity
+    the model drains fast, so water there is mostly lost.
+  value: config.advice.target_margin
+  unit: "below field capacity"
+  basis: The fitted drainage above field capacity (drain_rate, s_fc).
+  impact: A smaller margin wastes water to drainage; a larger one waters more often.
+  test: The drainage term in the backtest; leaching measurements if available.
+  refs: [§8]
+
+- id: active-soil-temp
+  title: Roots are inactive in cold soil
+  statement: >
+    No watering is advised while the 7-day mean soil temperature is below
+    this.
+  value: config.advice.min_soil_temp_c
+  unit: "°C"
+  basis: >
+    Oregon State extension: blueberry root growth starts at about 13 °C (55 °F)
+    and runs into early November, with a second root flush in September.
+  impact: Too high → misses the September root flush. Too low → advises watering into dormancy.
+  test: Compare the advised season with the farm's own start and stop dates.
+  refs: [§9]
+
+- id: active-demand
+  title: Low water demand means no watering
+  statement: >
+    No watering is advised while the crop's potential water demand (ET0 × Kc,
+    before drought stress) averages below this over the coming week.
+  value: config.advice.min_crop_use_mm_per_day
+  unit: "mm/day"
+  basis: >
+    2025 potential demand: June 4.6, September 1.6, October 0.6 mm/day.
+    Potential, not actual: actual use falls in a drought, which would make a
+    thirsty crop look dormant.
+  impact: Sets where the advised season ends in autumn.
+  test: As above.
+  refs: [§9]
+
+- id: watering-time
+  title: Logged waterings happen at a fixed local time
+  statement: >
+    The fertigation log has dates only, so each watering is placed at this
+    local time.
+  value: config.watering.default_local_time
+  unit: "local time"
+  basis: The farm says it waters in the late afternoon.
+  impact: >
+    Small. The model is daily, and doses barely show on the probes, so the
+    time only shifts which day a dose counts.
+  test: A log with clock times.
+  refs: [§4.1]
+
+- id: log-complete
+  title: The fertigation log lists every watering
+  statement: There is no plain-water irrigation besides the logged fertigation runs.
+  value: null
+  basis: Confirmed by the farm (2026-11-17).
+  impact: A missing watering would look like unexplained wetting, and bias the drip effect.
+  test: The 2026 log; compare the farm's water meter if there is one.
+  refs: [§4.1]
+
+- id: preferred-time
+  title: Water in the early morning
+  statement: The advice suggests watering at this local time.
+  value: config.advice.preferred_local_time
+  unit: "local time"
+  basis: >
+    With drip, leaf wetness doesn't matter. Watering before the day's demand
+    peak puts the water in place when the plant needs it.
+  impact: Small for drip. A daily model can't resolve it beyond which day a dose counts.
+  test: Not resolvable with daily soil means; would need hourly modelling.
+  refs: [§3]
+
+- id: rain-gauge
+  title: The on-site gauge is trusted unless it under-reads for weeks
+  statement: >
+    The gauge is replaced by Open-Meteo where, over a centred window, it
+    caught less than min_ratio of at least min_reference_mm of modelled rain.
+  value: config.rain.min_reference_mm
+  unit: "mm over the window (min_ratio and window in config)"
+  basis: >
+    The gauge catches local showers that Open-Meteo misses, but it failed for
+    whole months (Dec 2025, Jul–Oct 2026).
+  impact: A threshold too high hides a dead gauge in a dry month (as July 2026 first did).
+  test: The gauge's maintenance log; soil rises without gauge rain.
+  refs: [§4.6, §5]
+
+- id: daily-model
+  title: One root-zone bucket, one daily step
+  statement: >
+    The soil is one bucket of water on the relative scale, stepped daily. The
+    soil bed under the plants is not modelled separately.
+  value: null
+  basis: >
+    The bake-off: the two-bucket variant (with the bed) overfit with ~400 days
+    of data; the single bucket was best among models that respond correctly
+    to water.
+  impact: >
+    Can't express time-of-day effects. May miss capillary supply from the bed
+    (the flat, rainless August 2025).
+  test: Re-run the bake-off (`wp6-blue-irrigation backtest`) when more data arrives.
+  refs: [§4.3, §7, ADR 0009]
+
+- id: perfect-weather
+  title: The scores assume a perfect weather forecast
+  statement: >
+    The backtest drives the model with the weather that actually happened,
+    so its scores rate the model, not Open-Meteo's forecast.
+  value: null
+  basis: It isolates model skill.
+  impact: In operation, forecast error adds to the forecast error, and the band is too narrow.
+  test: Re-run the backtest on Open-Meteo's archived historical forecasts.
+  refs: [§7]
+
+- id: band
+  title: The forecast band is held-out error
+  statement: >
+    The 80 % band is the 10–90 % quantile of residuals on the last 20 % of the
+    training data, per lead time.
+  value: model.backtest.band80_cover
+  unit: "share of backtest outcomes inside the band (target 0.80)"
+  basis: In-sample residuals gave a band that caught only 56 %.
+  impact: Below 0.80, outcomes fall outside the band more often than its name says.
+  test: The calibrate CLI reports it each fit.
+  refs: [§7, ADR 0009]

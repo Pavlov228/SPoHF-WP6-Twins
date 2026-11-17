@@ -73,6 +73,27 @@ _BED = {
 }
 
 
+#: What each parameter means, for people: (meaning, unit). The scale "S" is the
+#: fused relative soil moisture (0 dry – 1 wet).
+PARAM_DOCS: dict[str, tuple[str, str]] = {
+    "rain_eff": ("Rise in soil moisture per mm of rain", "S per mm"),
+    "irr_eff": ("Rise per litre of drip per plant (fitted; the shipped model ties it to "
+                "rain over the plant's area instead)", "S per L"),
+    "et_scale": ("Drying per mm of reference evaporation (ET0) at full water supply",
+                 "S per mm"),
+    "kc_slope": ("How the crop's water use changes through the season, per 100 days from "
+                 "midsummer (negative = less in autumn)", "per 100 days"),
+    "theta": ("Level below which drying slows as the plant runs short (stress onset)", "S"),
+    "drain_rate": ("Share of the water above field capacity that drains per day", "per day"),
+    "s_fc": ("Field capacity: above it, water drains away", "S"),
+    "mix": ("Share of a day's rain and watering that shows in that day's mean "
+            "(the rest shows the next day)", "share"),
+    "exchange": ("Water exchange between root zone and soil bed per day", "per day"),
+    "bed_relax": ("How fast the soil bed returns to its own level", "per day"),
+    "b_eq": ("The soil bed's own level", "S"),
+}
+
+
 def _spec(name: str, table: dict[str, tuple[float, float, float]]) -> BucketSpec:
     return BucketSpec(
         name=name,

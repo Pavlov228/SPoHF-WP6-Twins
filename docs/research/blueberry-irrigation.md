@@ -430,3 +430,18 @@ Kept from the replay work: the crop-activity gate (§9), now used by the live
 advice. Learned: an open-loop season simulation drifts badly (mean error 0.10 in
 2025 and 0.26 in 2026), so the model should only be trusted over its 7-day
 horizon from a measured start, which is exactly what the simulator does.
+
+## 11. Assumption register
+
+Every assumption the forecast and advice rest on is listed **once**, in
+`src/wp6_data/blue/irrigation/assumptions.yaml`. The list covers the dose area,
+the relative scale, the dry limit, trigger, target, activity gates, watering
+and preferred times, log completeness, the rain-gauge rule, the daily
+single-bucket structure, the perfect-weather backtest, and the band. Each
+entry gives the assumption, why it was made, what changes if it's wrong, and
+how to test it.
+
+Entries **point at** their value in config or the shipped model instead of
+copying it, so the register can't drift. `/irrigation/model` renders it with the
+current values, next to the fitted parameters and backtest scores. A test fails
+if a pointer stops resolving.

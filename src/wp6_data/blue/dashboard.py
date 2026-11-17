@@ -10,7 +10,7 @@ from wp6_data.blue.routes import api as blue_api
 from wp6_data.blue.routes import charts as blue_charts
 from wp6_data.blue.routes import gdd as gdd_route
 from wp6_data.blue.routes import irrigation as irrigation_route
-from wp6_data.blue.routes import irrigation_simulator, ops
+from wp6_data.blue.routes import irrigation_model, irrigation_simulator, ops
 from wp6_data.blue.routes.monitor import broken_sensors as broken_sensors_monitor
 from wp6_data.blue.routes.monitor import harvest as harvest_monitor
 from wp6_data.blue.routes.monitor import legacy_router as legacy_monitor_router
@@ -136,6 +136,7 @@ config = TwinConfig(
         gdd_route.router,
         irrigation_route.router,
         irrigation_simulator.router,
+        irrigation_model.router,
         monitor_router,
         legacy_monitor_router,
         manual_monitor.router,
