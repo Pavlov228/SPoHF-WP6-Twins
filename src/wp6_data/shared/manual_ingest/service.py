@@ -13,7 +13,7 @@ Two public methods:
 - ``apply(validation_id, filename) -> ApplyResult`` — single transaction that
   atomically swaps the source's data: DELETE prior rows, INSERT the
   ``manual_uploads`` audit row, INSERT parsed readings; then post-commit
-  bookkeeping + 2-file prune.
+  bookkeeping + file prune (see ``UploadStorage.prune``).
 """
 
 from __future__ import annotations

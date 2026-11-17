@@ -2,8 +2,9 @@
 
 Files land at ``{source}/{sha256}{suffix}`` in a
 :class:`~wp6_data.shared.blob.BlobStore` — addressable by hash (the
-validation_id the upload flow uses) and grouped per source for the 2-file prune
-policy. ``suffix`` comes from the source descriptor and defaults to ``.xlsx`` so
+validation_id the upload flow uses) and grouped per source for the prune
+policy (latest two, plus any file whose upload still owns readings).
+``suffix`` comes from the source descriptor and defaults to ``.xlsx`` so
 callers that omit it are unaffected.
 
 This was a directory on a ReadWriteOnce PVC, which is what kept both dashboards
@@ -74,9 +75,17 @@ class UploadStorage:
         return await self.store.get(key)
 
     async def prune(self, source: str) -> list[str]:
-        """Keep the latest two audit rows' files for ``source``.
+        """Drop stored files for ``source`` that are neither live nor recent.
 
-        Older audit rows have their objects removed and are marked
+        A file is kept when its upload is one of the latest two for the source
+        (the one-back undo copy) **or** still owns rows in ``readings``. The
+        second rule is what makes scoped sources safe: a source fed by several
+        files (e.g. one per year) has one live upload per scope, and a plain
+        "latest two" would delete the file behind a scope that was simply not
+        re-uploaded recently — blue's ``long_data`` lost its 2024 workbook once
+        2025 and 2026 had been uploaded after it.
+
+        Other audit rows have their objects removed and are marked
         ``file_path = NULL, file_pruned = TRUE``. The audit rows themselves are
         preserved indefinitely as upload history.
 
@@ -90,24 +99,29 @@ class UploadStorage:
         """
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
+                # One statement classifies every stored row, so the keep/drop
+                # split is a single consistent snapshot. `upload_id IS NOT NULL`
+                # lets the planner use the manual-readings partial index rather
+                # than scanning the whole hypertable.
                 await cur.execute(
-                    "SELECT id, file_path FROM manual_uploads "
-                    "WHERE source = %s AND file_path IS NOT NULL "
-                    "ORDER BY uploaded_at DESC OFFSET 2",
+                    "WITH stored AS ("
+                    "  SELECT id, file_path,"
+                    "         row_number() OVER (ORDER BY uploaded_at DESC) AS rn"
+                    "  FROM manual_uploads"
+                    "  WHERE source = %s AND file_path IS NOT NULL"
+                    "), live AS ("
+                    "  SELECT DISTINCT upload_id FROM readings"
+                    "  WHERE upload_id IS NOT NULL"
+                    "    AND upload_id IN (SELECT id FROM stored)"
+                    ") "
+                    "SELECT id, file_path,"
+                    "       rn <= 2 OR id IN (SELECT upload_id FROM live) AS keep "
+                    "FROM stored",
                     (source,),
                 )
-                rows = await cur.fetchall()
-
-                # The keys the rows we are KEEPING still depend on. Read inside
-                # the same transaction as the select above, so a concurrent
-                # upload cannot slip between the two and have its object deleted.
-                await cur.execute(
-                    "SELECT file_path FROM manual_uploads "
-                    "WHERE source = %s AND file_path IS NOT NULL "
-                    "ORDER BY uploaded_at DESC LIMIT 2",
-                    (source,),
-                )
-                retained = {stored_key(p) for (p,) in await cur.fetchall()}
+                classified = await cur.fetchall()
+                rows = [(i, p) for i, p, keep in classified if not keep]
+                retained = {stored_key(p) for _, p, keep in classified if keep}
 
                 if rows:
                     await cur.execute(
@@ -118,8 +132,8 @@ class UploadStorage:
                     )
             await conn.commit()
 
-        # Marking the row pruned is right either way — it is no longer one of the
-        # latest two. Only the object is spared.
+        # Marking the row pruned is right either way — it is neither live nor
+        # recent. Only an object a kept row shares is spared.
         keys = sorted({stored_key(stored) for _, stored in rows} - retained)
         if keys:
             await self.store.delete(*keys)

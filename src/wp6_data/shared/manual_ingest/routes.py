@@ -254,8 +254,8 @@ def make_source_router(
         body = f"""
             <h1>{escape(source.display_name)} upload history</h1>
             <p>Audit log of every {escape(source.display_name)} upload.
-               Pruned uploads still appear; only the latest 2 files per
-               source are kept on disk.</p>
+               Pruned uploads still appear; files are kept for the latest 2
+               uploads and for any upload whose data is still live.</p>
             {body_html}
         """
         return render_page(

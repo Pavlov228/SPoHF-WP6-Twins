@@ -146,3 +146,43 @@ async def test_prune_marks_older_audit_rows_pruned_and_keeps_them_in_db(
     assert middle_row["file_pruned"] is False
     assert newest_row["file_path"] == str(files[2][0])
     assert newest_row["file_pruned"] is False
+
+
+async def test_prune_keeps_an_old_upload_whose_readings_are_still_live(
+    red_pool, red_tsdb_conn, tmp_path: Path,
+):
+    """A scoped source (e.g. one file per year) keeps one live upload per
+    scope. The oldest scope's file must survive even after two newer uploads
+    for other scopes — it still backs rows in `readings`."""
+    from datetime import UTC, datetime
+
+    store = LocalBlobStore(tmp_path)
+    storage = UploadStorage(store=store, pool=red_pool)
+    oldest, middle, newest = await _seed_three_uploads(storage, red_tsdb_conn)
+
+    async with red_tsdb_conn.cursor() as cur:
+        await cur.execute(
+            "SELECT id FROM manual_uploads WHERE source = %s AND file_hash = %s",
+            (E2E_SOURCE, oldest[1]),
+        )
+        (oldest_id,) = await cur.fetchone()
+        await cur.execute(
+            "INSERT INTO readings "
+            "(time, device_name, sensor_tag, value, source, upload_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (datetime(2024, 6, 1, tzinfo=UTC), "e2e-dev", "e2e-tag", 1.0,
+             E2E_SOURCE, oldest_id),
+        )
+    await red_tsdb_conn.commit()
+
+    assert await storage.prune(E2E_SOURCE) == []
+
+    for key, _hash in (oldest, middle, newest):
+        assert await store.exists(key)
+    async with red_tsdb_conn.cursor() as cur:
+        await cur.execute(
+            "SELECT count(*) FROM manual_uploads "
+            "WHERE source = %s AND file_pruned",
+            (E2E_SOURCE,),
+        )
+        assert (await cur.fetchone())[0] == 0
