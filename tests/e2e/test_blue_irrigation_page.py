@@ -61,6 +61,6 @@ async def test_irrigation_page_fuses_readings_from_the_database(monkeypatch):
 
     assert response.status_code == 200
     assert "Fused soil moisture" in response.text
-    assert f'id="probes-now">{len(PROBES)} / {len(PROBES)}<' in response.text
+    assert 'class="year-toggle"' in response.text
     for probe in PROBES:
         assert probe in response.text

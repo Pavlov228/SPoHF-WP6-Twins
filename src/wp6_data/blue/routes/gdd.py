@@ -21,6 +21,7 @@ from wp6_data.blue.gdd import (
     gdd_from_forecasts,
     get_weather_hours,
 )
+from wp6_data.blue.routes.year_toggle import YEAR_TOGGLE_CSS, year_toggle
 from wp6_data.config import Settings
 from wp6_data.shared import render_card, render_page
 from wp6_data.shared.auth import verify_session_user
@@ -67,7 +68,7 @@ YEAR_COLORS = {
     3: "#e5e7eb",
 }
 
-GDD_CSS = """
+GDD_CSS = YEAR_TOGGLE_CSS + """
     .gdd-controls {
         display: flex; gap: 1rem; align-items: end;
         flex-wrap: wrap; margin-bottom: 0.5rem;
@@ -76,30 +77,6 @@ GDD_CSS = """
     .gdd-controls input[type="number"],
     .gdd-controls input[type="date"] {
         padding: 0.3rem 0.5rem; margin: 0;
-    }
-    .year-toggle {
-        display: flex; gap: 0; margin-bottom: 0.5rem;
-        border-radius: 6px; overflow: hidden;
-        border: 1px solid var(--dashboard-primary);
-        width: fit-content;
-    }
-    .year-btn {
-        font-size: 0.8rem; padding: 0.3rem 0.8rem;
-        cursor: pointer; border: none; border-radius: 0;
-        background: transparent;
-        color: var(--dashboard-primary);
-        text-decoration: none;
-        transition: background 0.15s, color 0.15s;
-    }
-    .year-btn:not(:last-child) {
-        border-right: 1px solid var(--dashboard-primary);
-    }
-    .year-btn.active {
-        background: var(--dashboard-primary); color: #fff;
-    }
-    .year-btn:not(.active):hover {
-        background: color-mix(
-            in srgb, var(--dashboard-primary) 12%, transparent);
     }
     .stats-grid { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .stats-grid article {
@@ -309,20 +286,14 @@ def _year_toggle_html(
     base: float,
     biofix_md: tuple[int, int],
 ) -> str:
-    """Render year selection toggle buttons."""
-    buttons = []
-    for y in available:
-        active = "active" if y == primary else ""
-        params = (
-            f"?year={y}&base={base}"
-            f"&biofix_month={biofix_md[0]}"
-            f"&biofix_day={biofix_md[1]}"
-        )
-        buttons.append(
-            f'<a href="/gdd{params}" class="year-btn {active}">'
-            f'{y}</a>')
-
-    return f'<div class="year-toggle">{"".join(buttons)}</div>'
+    """Year selection toggle, keeping the base and biofix in each link."""
+    return year_toggle(
+        available, primary,
+        lambda y: (
+            f"/gdd?year={y}&base={base}"
+            f"&biofix_month={biofix_md[0]}&biofix_day={biofix_md[1]}"
+        ),
+    )
 
 
 def _controls_html(

@@ -13,22 +13,34 @@ import html
 from datetime import UTC, date, datetime, time
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import structlog
 from cachetools import TTLCache
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from plotly.subplots import make_subplots
 
 from wp6_data.blue.irrigation.config import load_config
-from wp6_data.blue.irrigation.moisture import FusedMoisture, load_fused, quality_table
+from wp6_data.blue.irrigation.moisture import (
+    DISAGREES,
+    DROPOUT,
+    EXCLUDED,
+    FROZEN,
+    OK,
+    SPIKE,
+    FusedMoisture,
+    load_fused,
+    quality_table,
+)
 from wp6_data.blue.irrigation.weather import (
     STATION,
     IrrigationWeather,
     load_weather,
 )
 from wp6_data.blue.provider import BlueSensorProvider
+from wp6_data.blue.routes.year_toggle import YEAR_TOGGLE_CSS, year_toggle
 from wp6_data.config import Settings
 from wp6_data.shared import render_card, render_page, render_table
 from wp6_data.shared.auth import verify_session_user
@@ -56,12 +68,8 @@ RAIN_TRACES = {
     "forecast": ("Open-Meteo forecast", "#94a3b8"),
 }
 
-IRRIGATION_CSS = """
-    .season-toggle { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .stats-grid { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .stats-grid article { flex: 1; min-width: 140px; text-align: center; padding: 0.5rem; }
-    .stat-value { font-size: 1.5rem; font-weight: bold; }
-"""
+IRRIGATION_CSS = YEAR_TOGGLE_CSS
+
 
 
 async def irrigation_weather() -> IrrigationWeather:
@@ -84,15 +92,6 @@ async def fused_moisture() -> FusedMoisture:
         cached = await load_fused(_provider, load_config(), now=datetime.now(UTC))
         _fused_cache["fused"] = cached
     return cached
-
-
-def _season_toggle(years: list[int], active: int) -> str:
-    def link(y: int) -> str:
-        style = "" if y == active else ' class="outline"'
-        return f'<a href="/irrigation?year={y}" role="button"{style}>{y}</a>'
-
-    links = "".join(link(y) for y in years)
-    return f'<nav class="season-toggle">{links}</nav>'
 
 
 def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datetime, row: int):
@@ -213,11 +212,137 @@ def _chart(
     return _figure(result, weather, start, end).to_html(include_plotlyjs="cdn", full_html=False)
 
 
+#: How each reading is drawn in the per-probe view: used, or dropped and why.
+#: A ``missing`` hour has no reading, so there is nothing to draw.
+PROBE_READING_STYLES = {
+    OK: ("used", "#2563eb"),
+    DROPOUT: ("dropout", "#dc2626"),
+    SPIKE: ("spike", "#f97316"),
+    DISAGREES: ("disagrees", "#9333ea"),
+    FROZEN: ("frozen", "#06b6d4"),
+    EXCLUDED: ("excluded", "#111827"),
+}
+#: Height of one probe's row in the per-probe view.
+PROBE_ROW_PX = 150
+
+
+def _compact(values: pd.Series) -> tuple[np.ndarray, np.ndarray]:
+    """Only a trace's own points, plus one NaN after each run to break the line.
+
+    Every probe-reason trace would otherwise carry the full hourly index (mostly
+    NaN), which made a year's view about 13 MB. Times go out as epoch
+    milliseconds, which Plotly ships as a packed binary array, not one string
+    per point.
+    """
+    present = values.notna()
+    keep = present | present.shift(1, fill_value=False)
+    kept = values[keep]
+    millis = kept.index.as_unit("ms").asi8.astype("float64")
+    return millis, kept.to_numpy(dtype="float64")
+
+
+def probe_figure(result: FusedMoisture, start: datetime, end: datetime) -> go.Figure:
+    """Every probe's hourly readings in its own unit, coloured by how the fusion
+    treated each one: used, or dropped and why. One row per probe."""
+    raw = result.raw.loc[start:end]
+    reasons = result.reasons.loc[start:end]
+    probes = list(raw.columns)
+    table = quality_table(result, start, end)
+    titles = [
+        f"{p} · used {int(table.loc[p, 'used_h'])} h · share {table.loc[p, 'share']:.0%}"
+        for p in probes
+    ]
+    fig = make_subplots(
+        rows=len(probes), cols=1, shared_xaxes=True, vertical_spacing=0.025,
+        subplot_titles=titles,
+    )
+    in_legend: set[str] = set()
+    for row, probe in enumerate(probes, start=1):
+        for reason, (label, colour) in PROBE_READING_STYLES.items():
+            values = raw[probe].where(reasons[probe] == reason)
+            if values.notna().sum() == 0:
+                continue
+            x, y = _compact(values)
+            fig.add_trace(go.Scattergl(
+                x=x, y=y, mode="lines", connectgaps=False,
+                line={"color": colour, "width": 1.5},
+                name=label, legendgroup=label, showlegend=label not in in_legend,
+                hovertemplate=f"%{{y:.1f}} %VWC · {label}<extra></extra>",
+            ), row=row, col=1)
+            in_legend.add(label)
+        fig.update_yaxes(title_text="%VWC", row=row, col=1)
+    fig.update_annotations(font_size=12, xanchor="left", x=0)
+    fig.update_layout(
+        height=PROBE_ROW_PX * len(probes) + 110,
+        margin={"l": 60, "r": 20, "t": 30, "b": 70},
+        legend={"orientation": "h", "y": 0, "yanchor": "bottom", "yref": "container"},
+        hovermode="x unified",
+    )
+    # Times are epoch milliseconds (see _compact); tell every axis they're dates.
+    fig.update_xaxes(type="date")
+    return fig
+
+
+@router.get("/irrigation/probes.json")
+async def irrigation_probes(
+    year: Annotated[int, Query(description="Season to show")],
+) -> Response:
+    """The per-probe view as Plotly JSON, fetched only when the section is opened.
+    Every probe's every hour is a lot of points to put on the page up front."""
+    result = await fused_moisture()
+    start = datetime.combine(date(year, 1, 1), time.min, tzinfo=UTC)
+    end = datetime.combine(date(year, 12, 31), time.max, tzinfo=UTC)
+    return Response(probe_figure(result, start, end).to_json(), media_type="application/json")
+
+
+def _probe_details(year: int) -> str:
+    """A collapsed section that loads the per-probe view the first time it opens."""
+    return f"""
+        <details id="probe-readings" data-src="/irrigation/probes.json?year={year}">
+            <summary>All readings per probe {year} (loads on demand)</summary>
+            <p><small>Each probe's hourly readings in its own %VWC. Blue is what the
+            fusion used; other colours are readings it dropped, by reason.</small></p>
+            <div id="probe-readings-chart"><p aria-busy="true">Loading…</p></div>
+        </details>
+        <script>
+        (function () {{
+            const details = document.getElementById("probe-readings");
+            let loaded = false;
+            details.addEventListener("toggle", async function () {{
+                if (!details.open || loaded) return;
+                loaded = true;
+                const target = document.getElementById("probe-readings-chart");
+                try {{
+                    const response = await fetch(details.dataset.src);
+                    if (!response.ok) throw new Error(response.status);
+                    const fig = await response.json();
+                    target.innerHTML = "";
+                    Plotly.newPlot(target, fig.data, fig.layout, {{responsive: true}});
+                }} catch (err) {{
+                    loaded = false;
+                    target.innerHTML = "<p>Could not load the probe readings.</p>";
+                }}
+            }});
+        }})();
+        </script>"""
+
+
+#: Readable headers for the quality table's columns.
+QUALITY_HEADERS = {
+    "used_h": "Used (h)", "dry_ref": "Dry ref (%VWC)", "wet_ref": "Wet ref (%VWC)",
+    "share": "Share",
+}
+
+
 def _quality_html(result: FusedMoisture, start: datetime, end: datetime) -> str:
     table = quality_table(result, start, end)
-    headers = ["Probe", *[str(c) for c in table.columns]]
+    headers = ["Probe", *[QUALITY_HEADERS.get(c, f"{c.capitalize()} (h)") for c in table.columns]]
+
+    def cell(column: str, value: object) -> str:
+        return f"{value:.0%}" if column == "share" else str(value)
+
     rows = [
-        [html.escape(probe), *[str(v) for v in row]]
+        [html.escape(probe), *[cell(c, v) for c, v in zip(table.columns, row, strict=True)]]
         for probe, row in zip(table.index, table.itertuples(index=False), strict=True)
     ]
     return render_table(headers, rows)
@@ -255,18 +380,6 @@ async def irrigation_page(
     start = datetime.combine(date(year, 1, 1), time.min, tzinfo=UTC)
     end = datetime.combine(date(year, 12, 31), time.max, tzinfo=UTC)
 
-    latest_at = has_data.index[-1]
-    probes_now = f"{int(result.coverage.loc[latest_at])} / {len(result.reasons.columns)}"
-    stats = f"""
-        <div class="stats-grid">
-            <article><div class="stat-value">{result.fused.loc[latest_at]:.2f}</div>
-                <small>Soil moisture now (0 dry – 1 wet)</small></article>
-            <article><div class="stat-value" id="probes-now">{probes_now}</div>
-                <small>Probes used now</small></article>
-            <article><div class="stat-value">{latest_at:%d %b %H:%M}</div>
-                <small>Latest reading (UTC)</small></article>
-        </div>"""
-
     explainer = (
         "<p>The soil probes agree on <em>how</em> the soil wets and dries, but not on the "
         "level, so each is put on its own scale: <strong>0</strong> is its driest "
@@ -284,12 +397,11 @@ async def irrigation_page(
     body = (
         "<h1>Irrigation</h1>"
         + explainer
-        + stats
-        + _season_toggle(years, year)
+        + year_toggle(years, year, lambda y: f"/irrigation?year={y}")
         + render_card(f"Soil moisture and weather {year}", _chart(result, weather, start, end))
         + render_card(
             f"Probe quality {year}",
-            _quality_html(result, start, end),
+            _quality_html(result, start, end) + _probe_details(year),
             description=(
                 "Hours each probe was used or dropped, and why; its own dry and wet "
                 "reference (in %VWC); and its share of the fused stream."

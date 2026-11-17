@@ -303,3 +303,55 @@ def test_a_frozen_probe_is_masked_so_a_thaw_does_not_read_as_rain():
     assert (result.reasons.loc[frost, ["p-a", "p-b", "p-c", "p-d"]] == FROZEN).all().all()
     assert (result.reasons.loc[frost, "p-e"] != FROZEN).all()
     assert (result.coverage.loc[frost] <= 1).all()
+
+
+def test_probe_view_draws_every_reading_coloured_by_how_it_was_used():
+    from wp6_data.blue.routes.irrigation import PROBE_READING_STYLES, probe_figure
+
+    config = _config()
+    raw = _probes(_truth())
+    raw.loc["2025-06-01":"2025-06-03", "p-c"] = 0.0
+    result = fuse(raw, config)
+    start, end = result.raw.index[0], result.raw.index[-1]
+
+    fig = probe_figure(result, start, end)
+
+    drawn = {}
+    for trace in fig.data:
+        drawn[trace.name] = drawn.get(trace.name, 0) + int(np.isfinite(
+            np.asarray(trace.y, dtype=float)).sum())
+    # Every reading appears exactly once, as used or under its drop reason.
+    assert sum(drawn.values()) == int(result.raw.notna().sum().sum())
+    assert drawn[PROBE_READING_STYLES[DROPOUT][0]] > 0
+    assert drawn[PROBE_READING_STYLES[OK][0]] > 0
+    # Each label sits in the legend once, not once per probe.
+    legend = [t.name for t in fig.data if t.showlegend]
+    assert len(legend) == len(set(legend))
+
+
+@pytest.mark.asyncio
+async def test_probe_readings_load_on_demand_as_json(monkeypatch):
+    import json
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from wp6_data.blue.routes import irrigation
+    from wp6_data.shared.auth import verify_session_user
+
+    result = fuse(_probes(_truth()), _config())
+
+    async def fake_fused():
+        return result
+
+    monkeypatch.setattr(irrigation, "fused_moisture", fake_fused)
+    app = FastAPI()
+    app.include_router(irrigation.router)
+    app.dependency_overrides[verify_session_user] = lambda: "test-user"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/irrigation/probes.json?year=2025")
+
+    assert response.status_code == 200
+    fig = json.loads(response.text)
+    assert {"data", "layout"} <= fig.keys()
+    assert len(fig["data"]) >= len(PROBES)

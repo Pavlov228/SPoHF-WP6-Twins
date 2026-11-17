@@ -68,6 +68,9 @@ class FusedMoisture:
     reasons: pd.DataFrame
     #: Per-probe (dry, wet) reference in the probe's own unit.
     references: dict[str, tuple[float, float]]
+    #: Per-probe hourly readings as received, in the probe's own unit, so every
+    #: reading (used or dropped) stays inspectable.
+    raw: pd.DataFrame
 
 
 def mask_readings(
@@ -193,6 +196,7 @@ def fuse(
         scaled=used,
         reasons=reasons,
         references=refs,
+        raw=raw,
     )
 
 
@@ -218,6 +222,7 @@ def quality_table(result: FusedMoisture, start: datetime, end: datetime) -> pd.D
         })
     table = pd.DataFrame(rows).set_index("probe").fillna(0)
     reason_cols = [r for r in (MISSING, EXCLUDED, FROZEN, DROPOUT, SPIKE, DISAGREES) if r in table]
+    table[["used_h", *reason_cols]] = table[["used_h", *reason_cols]].astype(int)
     return table[["used_h", *reason_cols, "dry_ref", "wet_ref", "share"]]
 
 
