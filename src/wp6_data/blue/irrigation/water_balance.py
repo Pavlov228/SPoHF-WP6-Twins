@@ -46,6 +46,9 @@ class BucketSpec:
     x0: tuple[float, ...]
     lower: tuple[float, ...]
     upper: tuple[float, ...]
+    #: When set, the drip effect is not fitted but tied to rain: a litre per
+    #: plant counts as a millimetre of rain over this many m² (ADR 0009).
+    area_per_plant_m2: float | None = None
 
     @property
     def two_bucket(self) -> bool:
@@ -84,6 +87,30 @@ SINGLE_BUCKET = _spec("single bucket", _SINGLE)
 TWO_BUCKET = _spec("two bucket", _SINGLE | _BED)
 
 
+def dose_as_rain(spec: BucketSpec, area_per_plant_m2: float) -> BucketSpec:
+    """*spec* with the drip effect tied to rain over the plant's area, not fitted.
+
+    The probes sit away from the drippers, so the data can't identify the drip
+    effect on its own (research note §4.1, §7). Instead a litre per plant is
+    counted as rain spread over ``area_per_plant_m2``.
+    """
+    keep = [i for i, name in enumerate(spec.params) if name != "irr_eff"]
+    return BucketSpec(
+        name=f"{spec.name}, dose as rain over {area_per_plant_m2:g} m²",
+        params=tuple(spec.params[i] for i in keep),
+        x0=tuple(spec.x0[i] for i in keep),
+        lower=tuple(spec.lower[i] for i in keep),
+        upper=tuple(spec.upper[i] for i in keep),
+        area_per_plant_m2=area_per_plant_m2,
+    )
+
+
+def _drip_effect(spec: BucketSpec, p: dict[str, float]) -> float:
+    if spec.area_per_plant_m2 is not None:
+        return p["rain_eff"] / spec.area_per_plant_m2
+    return p["irr_eff"]
+
+
 @dataclass(frozen=True)
 class Inputs:
     """Daily drivers, shaped (days, origins). Row 0 is the origin day itself
@@ -111,6 +138,7 @@ def simulate(
     s = s0.astype(float).copy()
     b = (s.copy() if b0 is None else b0.astype(float).copy()) if spec.two_bucket else None
     out = np.empty((inputs.horizon, s.size))
+    irr_eff = _drip_effect(spec, p)
     for h in range(1, inputs.horizon + 1):
         mix = p["mix"]
         rain = mix * inputs.rain[h] + (1 - mix) * inputs.rain[h - 1]
@@ -119,7 +147,7 @@ def simulate(
         ks = np.clip(s / p["theta"], 0.0, 1.0)
         et = p["et_scale"] * kc * ks * inputs.et0[h]
         drain = p["drain_rate"] * np.maximum(s - p["s_fc"], 0.0)
-        delta = p["rain_eff"] * rain + p["irr_eff"] * irr - et - drain
+        delta = p["rain_eff"] * rain + irr_eff * irr - et - drain
         if b is not None:
             flow = p["exchange"] * (s - b)
             b = b + flow + p["bed_relax"] * (p["b_eq"] - b)

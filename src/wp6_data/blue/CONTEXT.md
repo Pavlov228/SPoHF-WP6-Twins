@@ -85,6 +85,14 @@ then fused by median. It is **relative**, not %VWC, and it always comes with
 its **coverage**: how many probes contributed that hour. A dropout reading
 (about 0) means the probe lost contact with drying peat, not dry soil.
 
+### Soil-moisture forecast
+The irrigation twin's 7-day outlook of daily fused soil moisture **if nobody
+waters**, driven by the weather forecast. It comes from a daily water balance
+(rain and drip in; ET0 × seasonal crop factor × a stress curve out; drainage
+when overfull) that is fitted locally and shipped in code (ADR 0009). It comes
+with an 80 % band. The drip effect is not measured but tied to rain: a litre
+per plant counts as a millimetre over the plant's area.
+
 ## Data sources
 
 ### Automated sensor source — the SPoHF datalake

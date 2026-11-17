@@ -76,6 +76,12 @@ watering:
   default_local_time: "17:00"
   timezone: "Europe/Amsterdam"
 
+# The forecast model (ADR 0009). The probes don't see drip, so its effect is tied
+# to rain: a litre per plant counts as a millimetre of rain over this area. The
+# pooled fit's ratio was ~2.2 m², consistent with a plant every 1–2 m.
+model:
+  area_per_plant_m2: 2.2
+
 # Manual override for a fault the mechanical checks miss. Prefer improving a
 # check over adding an entry here. Entries: {probe, start, end, reason}.
 exclude: []

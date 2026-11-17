@@ -59,6 +59,10 @@ class WateringParams(_Strict):
         return self
 
 
+class ModelParams(_Strict):
+    area_per_plant_m2: float
+
+
 class Exclusion(_Strict):
     probe: str
     start: datetime
@@ -74,6 +78,7 @@ class IrrigationConfig(_Strict):
     fusion: FusionParams
     rain: RainParams
     watering: WateringParams
+    model: ModelParams
     exclude: tuple[Exclusion, ...] = ()
 
     @model_validator(mode="after")

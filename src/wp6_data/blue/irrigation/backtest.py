@@ -140,17 +140,34 @@ def persistence(train: Origins, _history: pd.DataFrame) -> Predictor:
     return predict
 
 
-def bucket(spec: BucketSpec) -> Trainer:
-    """Model A (single bucket) or A2 (with the soil bed)."""
+def bucket(spec: BucketSpec, held_out_band: bool = False) -> Trainer:
+    """Model A (single bucket) or A2 (with the soil bed).
 
-    def train(train_o: Origins, history: pd.DataFrame) -> Predictor:
-        b0_train = _bed_states(spec, None, train_o, history) if spec.two_bucket else None
-        x = fit(spec, train_o.s0, train_o.inputs, train_o.observed, b0_train)
+    With *held_out_band*, the band comes from residuals on the last 20 % of the
+    training origins, under a fit to the first 80 %. In-sample residuals make
+    the band too narrow (it caught 56 % instead of 80 %, research note §7).
+    """
+
+    def fit_on(o: Origins, history: pd.DataFrame) -> tuple[np.ndarray, np.ndarray | None]:
+        b0 = _bed_states(spec, None, o, history) if spec.two_bucket else None
+        x = fit(spec, o.s0, o.inputs, o.observed, b0)
         if spec.two_bucket:
             # Refit once more with the bed spun up under the fitted parameters.
-            b0_train = _bed_states(spec, x, train_o, history)
-            x = fit(spec, train_o.s0, train_o.inputs, train_o.observed, b0_train)
-        lo, hi = _band(train_o.observed - simulate(spec, x, train_o.s0, train_o.inputs, b0_train))
+            b0 = _bed_states(spec, x, o, history)
+            x = fit(spec, o.s0, o.inputs, o.observed, b0)
+        return x, b0
+
+    def train(train_o: Origins, history: pd.DataFrame) -> Predictor:
+        x, b0_train = fit_on(train_o, history)
+        if held_out_band:
+            first, last = _holdout_split(len(train_o.days))
+            early, late = subset(train_o, first), subset(train_o, last)
+            x_early, _ = fit_on(early, history)
+            b0_late = _bed_states(spec, x_early, late, history) if spec.two_bucket else None
+            lo, hi = _band(late.observed - simulate(spec, x_early, late.s0, late.inputs, b0_late))
+        else:
+            residuals = train_o.observed - simulate(spec, x, train_o.s0, train_o.inputs, b0_train)
+            lo, hi = _band(residuals)
 
         def predict(o: Origins) -> Forecast:
             b0 = _bed_states(spec, x, o, history) if spec.two_bucket else None
@@ -158,6 +175,7 @@ def bucket(spec: BucketSpec) -> Trainer:
             return Forecast(mean, mean + lo, mean + hi)
 
         predict.params = dict(zip(spec.params, x, strict=True))  # type: ignore[attr-defined]
+        predict.band = (lo[:, 0], hi[:, 0])  # type: ignore[attr-defined]
         return predict
 
     return train

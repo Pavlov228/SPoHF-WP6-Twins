@@ -23,7 +23,9 @@ from fastapi.responses import HTMLResponse, Response
 from plotly.subplots import make_subplots
 
 from wp6_data.blue.irrigation.config import load_config
+from wp6_data.blue.irrigation.daily import daily_frame
 from wp6_data.blue.irrigation.events import load_events
+from wp6_data.blue.irrigation.model import forecast, load_model
 from wp6_data.blue.irrigation.moisture import (
     DISAGREES,
     DROPOUT,
@@ -148,6 +150,33 @@ def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datet
     fig.update_yaxes(title_text="mm / day", rangemode="tozero", row=row, col=1)
 
 
+#: Colour of the no-watering forecast and its band.
+FORECAST_COLOUR = "#7c3aed"
+
+
+def _forecast_traces(fig, outlook: pd.DataFrame) -> None:
+    """The model's daily forecast, assuming no watering, with its 80 % band.
+
+    Daily values are drawn at midday, the middle of the day they average.
+    """
+    if outlook.empty:
+        return
+    at = outlook.index + pd.Timedelta(hours=12)
+    band_x, band_y = band_polygons(
+        pd.Series(outlook["low"].to_numpy(), index=at),
+        pd.Series(outlook["high"].to_numpy(), index=at),
+    )
+    fig.add_trace(go.Scatter(
+        x=band_x, y=band_y, mode="lines", line={"width": 0}, fill="toself",
+        fillcolor="rgba(124, 58, 237, 0.15)", name="Forecast band (80 %)", hoverinfo="skip",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=at, y=outlook["mean"], mode="lines+markers",
+        line={"color": FORECAST_COLOUR, "width": 2, "dash": "dash"}, marker={"size": 5},
+        name="Forecast, no watering", hovertemplate="%{y:.2f} (forecast)<extra></extra>",
+    ), row=1, col=1)
+
+
 #: Colour of the watering (drip) markers on the soil-moisture panel.
 WATERING_COLOUR = "#16a34a"
 
@@ -211,6 +240,7 @@ def _figure(
     start: datetime,
     end: datetime,
     events: pd.DataFrame | None = None,
+    outlook: pd.DataFrame | None = None,
 ) -> go.Figure:
     fused = result.fused.loc[start:end]
     low = result.low.loc[start:end]
@@ -233,6 +263,8 @@ def _figure(
         name="Fused soil moisture", hovertemplate="%{y:.2f}<extra></extra>",
     ), row=1, col=1)
     fig.update_yaxes(title_text="relative (0 dry – 1 wet)", row=1, col=1)
+    if outlook is not None and not outlook.empty:
+        _forecast_traces(fig, outlook.loc[start:end])
     if events is not None:
         top = float(high.max()) if high.notna().any() else 1.0
         _event_traces(fig, events.loc[start:end], top=top)
@@ -257,8 +289,9 @@ def _chart(
     start: datetime,
     end: datetime,
     events: pd.DataFrame | None = None,
+    outlook: pd.DataFrame | None = None,
 ) -> str:
-    fig = _figure(result, weather, start, end, events)
+    fig = _figure(result, weather, start, end, events, outlook)
     return fig.to_html(include_plotlyjs="cdn", full_html=False)
 
 
@@ -424,6 +457,23 @@ async def irrigation_page(
         log.warning("irrigation_events_failed", exc_info=True)
         events = None
 
+    outlook = None
+    if weather is not None:
+        try:
+            config = load_config()
+            frame = daily_frame(
+                result, weather, events if events is not None else pd.DataFrame(
+                    columns=["volume_l_per_plant"], index=pd.DatetimeIndex([], tz="UTC"),
+                ),
+                config.watering.timezone,
+            )
+            outlook = forecast(frame, load_model(), config, datetime.now(UTC).date())
+            # Daily rows are local days; draw them on the UTC axis at local midnight.
+            outlook.index = outlook.index.tz_localize(config.watering.timezone).tz_convert(UTC)
+        except Exception:
+            log.warning("irrigation_forecast_failed", exc_info=True)
+            outlook = None
+
     has_data = result.coverage[result.coverage > 0]
     if has_data.empty:
         return render_page(
@@ -448,6 +498,9 @@ async def irrigation_page(
         "under-read Open-Meteo for weeks (a fault). Its bars then turn red and "
         "Open-Meteo stands in. Gauge hours with impossible values are dropped. ET0 is "
         "the day's reference evaporation demand.</p>"
+        "<p>The dashed purple line forecasts the next week's soil moisture if you "
+        "<em>don't</em> water, from the weather forecast. The band holds the outcome about "
+        "70–80 % of the time.</p>"
         "<p>Green markers are drip watering from the fertigation log. The log has dates "
         "only, so the time shown is assumed. The probes are not next to the drippers, "
         "so a watering barely registers on them; rain wets the whole surface.</p>"
@@ -458,7 +511,8 @@ async def irrigation_page(
         + explainer
         + year_toggle(years, year, lambda y: f"/irrigation?year={y}")
         + render_card(
-            f"Soil moisture and weather {year}", _chart(result, weather, start, end, events),
+            f"Soil moisture and weather {year}",
+            _chart(result, weather, start, end, events, outlook),
         )
         + render_card(
             f"Probe quality {year}",
