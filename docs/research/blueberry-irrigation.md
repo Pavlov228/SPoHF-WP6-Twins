@@ -284,3 +284,68 @@ once the event log is confirmed.
 - Peat volume per plant (optional prior). The effective capacity is fitted.
 - Cultivar. (Planting age: young, first fruit 2024.)
 - Does canopy overhang block rain from the root zone? This lowers the rain it catches.
+
+## 7. Model bake-off (issue 068, run 2026-11-17)
+
+**Setup:**
+- **Data and resolution:** daily, on the fused soil moisture. A day counts only
+  if it had at least 3 probes and at least 18 usable hours.
+- **Origins:** rolling, every in-season day (Apr–Oct) with a reading,
+  Apr 2025 – Oct 2026: 413 origins, forecasting 1–7 days ahead.
+- **Refitting:** each model is refitted monthly, on targets before that month.
+- **Weather** is as observed (a perfect forecast), so the scores rate the
+  models; in operation, forecast error adds to them.
+- **Code:** `blue/irrigation/backtest.py`. Model E runs outside the project
+  environment through `scripts/irrigation_foundation_models.py`, so torch never
+  enters the image.
+
+| Model | MAE 1 d | MAE 7 d | Skill 1 d | Skill 7 d | 80 % band catches | Water never dries | Dry week never wets |
+|---|---|---|---|---|---|---|---|
+| E Chronos-2 (zero-shot, covariates) | 0.033 | **0.086** | +5 % | **+21 %** | **74 %** | **6 %** ✗ | **34 %** ✗ |
+| **A single bucket** | **0.030** | 0.088 | **+11 %** | +19 % | 56 % | 100 % | 100 % |
+| B A + Kalman | 0.035 | 0.091 | 0 % | +17 % | 55 % | 100 % | 100 % |
+| A2 two bucket (bed) | 0.032 | 0.097 | +7 % | +11 % | 50 % | 98 % | 81 % |
+| C A + GBM residual | 0.035 | 0.107 | −2 % | +2 % | 57 % | 100 % | 4 % ✗ |
+| persistence | 0.034 | 0.109 | — | — | 64 % | — | — |
+| E Chronos-Bolt (univariate) | 0.035 | 0.111 | −3 % | −2 % | 74 % | n/a | n/a |
+| D GBM direct | 0.069 | 0.132 | −102 % | −21 % | 53 % | 45 % ✗ | 2 % ✗ |
+
+Skill is relative to persistence. Per season, A wins 2025 (+22 % at 7 days)
+and Chronos-2 edges 2026 (+21 % vs +17 %).
+
+**Findings:**
+- **A, the single bucket, is the best controllable model.** It has the best
+  1-day error, a 7-day error within 0.002 of the best, and it passes both
+  physical checks.
+  - The extras don't pay off with about 400 training days:
+    - **Kalman (B):** it smooths away a real reading at the origin.
+    - **Bed (A2):** it overfits.
+    - **GBM residual (C):** it breaks the physics, wetting during a dry
+      week 96 % of the time.
+- **Chronos-2 forecasts well zero-shot, but it is not controllable.** An
+  extra watering *lowers* its forecast in 94 % of cases, and a dry week wets
+  in 66 %. It learned the correlation "watering happens when dry", exactly as
+  the plan anticipated. Its bands are the best calibrated, though, which is
+  a useful benchmark for A's.
+- **D (gradient boosting) overfits badly:** it is worse than persistence.
+- **Probe set:** dropping `rij4` and `01` changes A's MAE by at most 0.002.
+  All probes stay.
+
+**Model A fitted on all data reads physically** (S units per unit):
+- `rain_eff` 0.0065/mm: a full 0→1 swing is about 150 mm of effective rain.
+- `et_scale` 0.0056/mm of ET0, with Ks = S/θ and θ ≈ 1.0. A summer day lowers S
+  by about 0.02, and drying slows as the soil dries.
+- `kc_slope` −0.47: water use falls from early summer into autumn.
+- `drain_rate` 0.63/day above `s_fc` 0.77: fast drainage when overfull.
+- `mix` 1.0: a day's inputs show in that day's mean.
+- **`irr_eff` 0.0030/L.** It is 0 in most monthly refits, because the doses
+  don't show on the probes (§4.1), so the data can't pin it down. The pooled
+  ratio `rain_eff / irr_eff` ≈ **2.2 m²** means 1 L of drip ≈ 1 mm of rain over
+  2.2 m². That matches a plant every 1–2 m (1–4 m²). → **Proposed prior:**
+  `irr_eff = rain_eff / area_per_plant`, with the area in config.
+
+**Open, for the user:**
+1. Choose A as the production model.
+2. Tie the dose response to rain over the plant's area (the proposed prior above).
+3. Calibrate A's bands: they catch 56 % instead of 80 %. Proposal: widen
+   them using held-out residuals, as C and D already do.
