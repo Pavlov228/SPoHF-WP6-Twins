@@ -98,17 +98,26 @@ async def irrigation_weather() -> IrrigationWeather:
     return cached
 
 
-def current_outlook(
+def outlook_frame(
     result: FusedMoisture, weather: IrrigationWeather | None, events: pd.DataFrame | None,
-) -> Outlook | None:
-    """The 7-day outlook from the latest reading, or None when it can't be made."""
+) -> pd.DataFrame | None:
+    """The daily model frame (soil moisture, weather, watering), or None without weather."""
     if weather is None:
         return None
+    return daily_frame(result, weather, events, load_config().watering.timezone)
+
+
+def current_outlook(
+    result: FusedMoisture, weather: IrrigationWeather | None, events: pd.DataFrame | None,
+    today: date | None = None,
+) -> Outlook | None:
+    """The 7-day outlook from the last reading up to *today* (default: now), or None."""
     try:
-        config = load_config()
-        frame = daily_frame(result, weather, events, config.watering.timezone)
-        return outlook(frame, load_model(), datetime.now(UTC).date(),
-                       config.advice.soil_temp_window_days)
+        frame = outlook_frame(result, weather, events)
+        if frame is None:
+            return None
+        return outlook(frame, load_model(), today or datetime.now(UTC).date(),
+                       load_config().advice.soil_temp_window_days)
     except Exception:
         log.warning("irrigation_outlook_failed", exc_info=True)
         return None

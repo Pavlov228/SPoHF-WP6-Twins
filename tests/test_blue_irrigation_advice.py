@@ -4,7 +4,7 @@ Constructed weather drives each case, and levels come from the shipped model
 and config, never hard-coded, so the tests follow a recalibration.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -134,7 +134,8 @@ def test_an_evening_dose_counts_on_the_next_day():
 
 
 @pytest.mark.asyncio
-async def test_simulator_page_runs_a_what_if(monkeypatch):
+@pytest.mark.parametrize("as_of", ["", str(TODAY)])
+async def test_simulator_runs_a_what_if_now_or_from_a_past_day(monkeypatch, as_of):
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
@@ -143,32 +144,58 @@ async def test_simulator_page_runs_a_what_if(monkeypatch):
     from wp6_data.shared.templates.config import configure_dashboard
 
     configure_dashboard("blue")
-    model = read_model(MODEL_PATH)
-    base = outlook(_frame(0.55), model, TODAY)
-    fused = type("F", (), {"fused": pd.Series(
-        [0.55] * 48, index=pd.date_range(pd.Timestamp(TODAY, tz="UTC") - pd.Timedelta(days=2),
-                                         periods=48, freq="h"))})()
+    frame = _frame(0.55)
+    hours = pd.date_range(pd.Timestamp(TODAY, tz="UTC") - pd.Timedelta(days=3),
+                          pd.Timestamp(TODAY, tz="UTC") + pd.Timedelta(days=8), freq="h")
+    fused = type("F", (), {"fused": pd.Series(0.55, index=hours)})()
 
     async def loaded():
         return fused
 
     monkeypatch.setattr(sim, "fused_moisture", loaded)
     monkeypatch.setattr(sim, "irrigation_weather", loaded)
-    monkeypatch.setattr(sim, "irrigation_events", loaded)
-    monkeypatch.setattr(sim, "current_outlook", lambda *_: base)
-    monkeypatch.setattr(sim, "daily_frame", lambda *_: _frame(0.55))
+    monkeypatch.setattr(sim, "irrigation_events", lambda: _no_events())
+    monkeypatch.setattr(sim, "outlook_frame", lambda *_: frame)
+    # "Now" is the frame's own last reading day, so both cases have an outlook.
+    monkeypatch.setattr(sim, "datetime", _Frozen)
 
     app = FastAPI()
     app.include_router(sim.router)
     app.dependency_overrides[verify_session_user] = lambda: "test-user"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
-            f"/irrigation/simulator?dose={2.4}&dose_day={TODAY + timedelta(days=1)}"
+            f"/irrigation/simulator?as_of={as_of}&dose=2.4&dose_day={TODAY + timedelta(days=1)}"
             f"&rain_pct=50&rain_delay=1&dose_time={EVENING}",
         )
 
     assert response.status_code == 200
     assert "What-if" in response.text
-    assert "No watering" in response.text
+    assert "No watering (forecast)" in response.text
     assert 'value="50"' in response.text  # the form keeps the chosen rain %
-    assert "Season replay" in response.text
+
+
+async def _no_events():
+    return pd.DataFrame(columns=["volume_l_per_plant"], index=pd.DatetimeIndex([], tz="UTC"))
+
+
+class _Frozen(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime.combine(TODAY + timedelta(days=1), datetime.min.time(), tzinfo=tz)
+
+
+def test_simulator_table_dates_are_local_days():
+    """The table summarises local calendar days. Using the UTC-shifted index put
+    every date a day early (local midnight is 22:00 UTC the day before)."""
+    from wp6_data.blue.routes.irrigation_simulator import _summary
+
+    model, config = read_model(MODEL_PATH), _config()
+    lv = levels(model, config)
+    o = outlook(_frame(lv.trigger + 0.01), model, TODAY)
+    path = trajectory(o, model, config)
+
+    first_below = _summary(path["mean"], lv)[2]
+
+    expected = path.index[path["mean"] < lv.trigger][0]
+    assert first_below == f"{expected:%a %d %b}"
+    assert expected > pd.Timestamp(TODAY)

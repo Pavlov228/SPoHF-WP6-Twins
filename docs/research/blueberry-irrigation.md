@@ -417,33 +417,16 @@ Result: the active season was 6 Apr – 29 Sep 2025 and 13 Apr – 2 Oct 2026. I
 2025 replay, the advice rule's 16 October watering disappears and the
 June–July ones remain.
 
-## 10. Season replay (issue 072)
+## 10. Simulating from a past day (issue 072)
 
-`/irrigation/simulator` has a "Season replay" section. It runs a past season
-under four policies: as logged, no watering, the advice rule (optionally capped
-per watering), and a fixed schedule.
+The user found a whole-season policy replay unhelpful ("stupid"), and it was
+removed. Instead, the **what-if simulator can start from any past day** (the
+"last known day"). The following week's actual weather stands in for the
+forecast. The what-ifs (rain less or later, a different dose or day) run on it,
+and the measured soil moisture and logged watering show what really happened,
+so a what-if can be held against reality.
 
-**Anchoring.** An open-loop replay drifts: the as-logged replay was off by 0.10
-on average in 2025 and by 0.26 in 2026, peaking at 0.51 in September. So a
-policy is anchored to the measurements, and the model only predicts the policy's
-*one-day* difference from what really happened, at the real soil level:
-
-    policy(t+1) = measured(t+1) + [step(policy(t), policy dose) − step(measured(t), logged dose)]
-
-"As logged" then reproduces the measurements exactly. An additive offset over
-the whole season was tried first. It blew up in 2026 (4,445 L, 1,890 mm drained),
-because the model's own state sat far above the measured soil, so drainage and
-ET were computed at the wrong level.
-
-**2025 replay** (stress counted only while the crop is active):
-
-| Policy | Water (L/plant) | Days below trigger | Longest run |
-|---|---|---|---|
-| As logged | 21 | 46 | 33 |
-| No watering | 0 | 52 | 37 |
-| Advice rule | 197 | 3 | 1 |
-| Fixed, 2.4 L every 10 days | 50 | 45 | 33 |
-
-The farm's doses bought about 6 fewer stress days than not watering. Keeping the
-soil above the trigger takes roughly ten times the water, at the dose prior
-(ADR 0009). The 2026 log will test whether that prior is right.
+Kept from the replay work: the crop-activity gate (§9), now used by the live
+advice. Learned: an open-loop season simulation drifts badly (mean error 0.10 in
+2025 and 0.26 in 2026), so the model should only be trusted over its 7-day
+horizon from a measured start, which is exactly what the simulator does.
