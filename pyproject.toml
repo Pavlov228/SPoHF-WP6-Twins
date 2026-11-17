@@ -53,6 +53,7 @@ wp6-blue-export = "wp6_data.blue.export:main"
 wp6-blue-ingest-insects = "wp6_data.blue.manual:ingest_insects"
 wp6-blue-ingest-long-data = "wp6_data.blue.manual:ingest_long_data"
 wp6-blue-ingest-fertigation-events = "wp6_data.blue.manual:ingest_fertigation_events"
+wp6-blue-irrigation = "wp6_data.blue.irrigation.cli:main"
 
 [build-system]
 requires = ["hatchling"]

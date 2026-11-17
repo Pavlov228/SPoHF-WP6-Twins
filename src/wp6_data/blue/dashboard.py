@@ -9,6 +9,7 @@ from wp6_data.blue.provider import BlueSensorProvider
 from wp6_data.blue.routes import api as blue_api
 from wp6_data.blue.routes import charts as blue_charts
 from wp6_data.blue.routes import gdd as gdd_route
+from wp6_data.blue.routes import irrigation as irrigation_route
 from wp6_data.blue.routes import ops
 from wp6_data.blue.routes.monitor import broken_sensors as broken_sensors_monitor
 from wp6_data.blue.routes.monitor import harvest as harvest_monitor
@@ -36,6 +37,18 @@ def _gdd_card() -> str:
         description=(
             "Growing Degree Days — track cumulative heat for harvest "
             "prediction."
+        ),
+        card_class="card-bg card-bg-growth",
+    )
+
+
+def _irrigation_card() -> str:
+    return render_card(
+        "Irrigation",
+        '<a href="/irrigation" role="button">Irrigation Dashboard</a>',
+        description=(
+            "Pot moisture fused from the soil probes: the basis for when and how "
+            "much to water."
         ),
         card_class="card-bg card-bg-growth",
     )
@@ -120,6 +133,7 @@ config = TwinConfig(
         blue_api.router,
         blue_charts.router,
         gdd_route.router,
+        irrigation_route.router,
         monitor_router,
         legacy_monitor_router,
         manual_monitor.router,
@@ -134,7 +148,7 @@ config = TwinConfig(
             render_fertilization_strategies_tab(),
         ),
     },
-    hero_cards=[_gdd_card, _monitor_card],
+    hero_cards=[_gdd_card, _irrigation_card, _monitor_card],
     status_extras=[*blue_manual.manual_cards(), object_store_status_card],
     export_sanitise_names=True,
     # Authenticated twin (TwinConfig.require_auth defaults to True): the app

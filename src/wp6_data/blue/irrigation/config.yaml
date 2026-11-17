@@ -1,0 +1,50 @@
+# Blue irrigation twin — configuration.
+#
+# Kept blue-local on purpose (issue 065): the fusion knobs and the override list
+# are irrigation concerns, not device metadata. The probe names must exist in
+# blue/metadata.yaml, which stays the source of truth for what a device is;
+# the loader rejects a name it does not know.
+
+# The soil-moisture probes that sit in the pots. All are in pot substrate, not
+# next to a dripper (see docs/research/blueberry-irrigation.md §4.1).
+probes:
+  - "SPoHF_EC-BV_rij1"
+  - "SPoHF_EC-BV_rij2"
+  - "SPoHF_EC-BV_rij3"
+  - "SPoHF_EC-BV_rij4"
+  - "SPoHF_EC-BV_rij5"
+  - "01 | 0E5E | BV + EC + BT"
+  - "02 | 0E4F | BV + EC + BT"
+  - "03 | 0E09 | BV + EC + BT"
+  - "04 | 0E69 | BV + EC + BT"
+  - "BV + BT + EC | Nr. 6"
+
+sensor: "soilMoisture"
+
+# Earliest data used. Normalisation references are taken over everything from
+# here on, so the scale does not move with the window being viewed.
+history_start: "2024-03-01"
+
+fusion:
+  # Readings below this are a probe that lost contact with drying peat, not a
+  # measurement (research note §4.2). Unit: the sensor's own %VWC.
+  floor: 1.0
+  # Readings this close to a sub-floor run are partial contact; drop them too.
+  dropout_pad_hours: 3
+  # Hampel spike filter: centred window, threshold in robust SDs, and a floor
+  # on the spread so a quiet signal is not flagged for ordinary noise.
+  spike_window_hours: 7
+  spike_k: 5.0
+  spike_min_spread: 0.5
+  # Per-probe scale: these quantiles of its clean history map to 0 and 1.
+  reference_low_quantile: 0.02
+  reference_high_quantile: 0.98
+  # A probe whose day-to-day changes stop tracking the others is masked for
+  # that stretch. Needs this many probes to form a consensus at all.
+  consensus_window_days: 30
+  consensus_min_corr: 0.3
+  consensus_min_probes: 3
+
+# Manual override for a fault the mechanical checks miss. Prefer improving a
+# check over adding an entry here. Entries: {probe, start, end, reason}.
+exclude: []

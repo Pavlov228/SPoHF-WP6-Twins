@@ -1,0 +1,255 @@
+"""Fused pot moisture: synthetic probes with known faults fuse back to the truth.
+
+Every probe sees the same pot water through its own offset and gain, which is
+the situation the research note describes. The fusion should undo the
+offset/gain and drop the faults, and it should report what it dropped and why.
+"""
+
+from datetime import UTC, datetime
+
+import numpy as np
+import pandas as pd
+import pytest
+import yaml
+
+from wp6_data.blue.irrigation import moisture
+from wp6_data.blue.irrigation.config import (
+    CONFIG_PATH,
+    IrrigationConfig,
+    parse_config,
+)
+from wp6_data.blue.irrigation.moisture import (
+    DISAGREES,
+    DROPOUT,
+    EXCLUDED,
+    MISSING,
+    OK,
+    SPIKE,
+    fuse,
+    to_hourly_frame,
+)
+
+PROBES = ("p-a", "p-b", "p-c", "p-d", "p-e")
+#: (offset, gain) per probe: the same water, read through different calibrations.
+CALIBRATION = {"p-a": (12.0, 20.0), "p-b": (18.0, 15.0), "p-c": (8.0, 25.0),
+               "p-d": (20.0, 18.0), "p-e": (15.0, 22.0)}
+DAYS = 120
+
+
+def _raw_config() -> dict:
+    with CONFIG_PATH.open(encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _config(**overrides) -> IrrigationConfig:
+    raw = _raw_config() | {"probes": list(PROBES)} | overrides
+    return IrrigationConfig(**raw)
+
+
+def _truth() -> pd.Series:
+    """Pot water in 0..1: dry-downs reset by a wetting every 9 days, plus a daily wiggle."""
+    index = pd.date_range("2025-04-01", periods=DAYS * 24, freq="h", tz=UTC)
+    hours = np.arange(len(index))
+    since_wetting = hours % (9 * 24)
+    drydown = 0.9 * np.exp(-since_wetting / (24 * 6)) + 0.05
+    daily = 0.02 * np.sin(2 * np.pi * hours / 24)
+    return pd.Series(drydown + daily, index=index)
+
+
+def _probes(truth: pd.Series, seed: int = 0) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    return pd.DataFrame({
+        p: off + gain * truth + rng.normal(0, 0.05, len(truth))
+        for p, (off, gain) in CALIBRATION.items()
+    })
+
+
+def _scaled_truth(truth: pd.Series, config: IrrigationConfig) -> pd.Series:
+    f = config.fusion
+    lo, hi = truth.quantile(f.reference_low_quantile), truth.quantile(f.reference_high_quantile)
+    return (truth - lo) / (hi - lo)
+
+
+def test_clean_probes_with_different_calibrations_fuse_to_the_truth():
+    config = _config()
+    truth = _truth()
+
+    result = fuse(_probes(truth), config)
+
+    error = (result.fused - _scaled_truth(truth, config)).abs()
+    assert error.max() < 0.05
+    assert (result.coverage == len(PROBES)).all()
+
+
+def test_a_probe_that_loses_contact_is_dropped_and_padded():
+    config = _config()
+    truth = _truth()
+    raw = _probes(truth)
+    lost = slice("2025-06-01", "2025-06-10")
+    raw.loc[lost, "p-c"] = 0.0
+
+    result = fuse(raw, config)
+
+    assert (result.reasons.loc[lost, "p-c"] == DROPOUT).all()
+    pad = pd.Timedelta(hours=config.fusion.dropout_pad_hours)
+    edge = pd.Timestamp("2025-06-01", tz=UTC) - pad
+    assert result.reasons.loc[edge, "p-c"] == DROPOUT
+    assert (result.coverage.loc[lost] == len(PROBES) - 1).all()
+    error = (result.fused - _scaled_truth(truth, config)).abs()
+    assert error.loc[lost].max() < 0.05
+
+
+def test_a_one_hour_spike_is_dropped_but_a_rain_step_is_kept():
+    config = _config()
+    truth = _truth()
+    raw = _probes(truth)
+    spike_at = pd.Timestamp("2025-05-15 12:00", tz=UTC)
+    raw.loc[spike_at, "p-a"] += 15.0
+
+    result = fuse(raw, config)
+
+    assert result.reasons.loc[spike_at, "p-a"] == SPIKE
+    # The wettings in the truth are hour-sharp steps, and none may read as a spike.
+    steps = truth.index[truth.diff() > 0.5]
+    assert len(steps) > 0
+    assert (result.reasons.loc[steps] != SPIKE).all().all()
+
+
+def test_a_probe_that_moves_against_the_others_is_masked_for_that_stretch():
+    config = _config()
+    truth = _truth()
+    raw = _probes(truth)
+    wrong = slice("2025-06-01", "2025-07-15")
+    off, gain = CALIBRATION["p-d"]
+    raw.loc[wrong, "p-d"] = off + gain * (1 - truth.loc[wrong])
+
+    result = fuse(raw, config)
+
+    middle = slice("2025-06-15", "2025-07-01")
+    assert (result.reasons.loc[middle, "p-d"] == DISAGREES).all()
+    # Outside the inverted stretch (and its window), p-d is trusted again.
+    assert (result.reasons.loc["2025-04-15":"2025-05-15", "p-d"] == OK).all()
+    error = (result.fused - _scaled_truth(truth, config)).abs()
+    assert error.loc[middle].max() < 0.05
+
+
+def test_a_manual_exclusion_wins_over_the_mechanical_checks():
+    excl = {"probe": "p-b", "start": "2025-05-01T00:00:00Z",
+            "end": "2025-05-03T00:00:00Z", "reason": "probe reseated"}
+    config = _config(exclude=[excl])
+    raw = _probes(_truth())
+    raw.loc["2025-05-01":"2025-05-02", "p-b"] = 0.0
+
+    result = fuse(raw, config)
+
+    assert (result.reasons.loc["2025-05-01":"2025-05-02", "p-b"] == EXCLUDED).all()
+
+
+def test_a_silent_probe_is_reported_missing_not_dropped():
+    start = datetime(2025, 4, 1, tzinfo=UTC)
+    end = datetime(2025, 4, 3, tzinfo=UTC)
+    rows = pd.DataFrame({
+        "device": ["p-a", "p-a"],
+        "time": [start, end],
+        "value": [20.0, 21.0],
+    })
+
+    frame = to_hourly_frame(rows, PROBES, start, end)
+
+    assert list(frame.columns) == list(PROBES)
+    assert len(frame) == 49
+    assert frame["p-b"].isna().all()
+    result = fuse(frame, _config())
+    assert (result.reasons["p-b"] == MISSING).all()
+
+
+def test_probes_must_be_declared_in_metadata():
+    raw = _raw_config()
+    with pytest.raises(ValueError, match="not declared in metadata"):
+        parse_config(raw, known_devices=set())
+
+
+def test_the_shipped_config_names_only_known_devices():
+    from wp6_data.blue.deps import metadata
+
+    config = parse_config(_raw_config(), set(metadata.devices))
+    assert config.probes
+
+
+def test_unknown_fusion_knobs_are_rejected():
+    raw = _raw_config()
+    raw["fusion"] = raw["fusion"] | {"flor": 2.0}
+    with pytest.raises(ValueError):
+        parse_config(raw, set(raw["probes"]))
+
+
+@pytest.mark.asyncio
+async def test_load_fused_asks_for_hourly_rows_covering_every_probe():
+    calls = {}
+
+    class FakeProvider:
+        async def fetch_data(self, **kwargs):
+            calls.update(kwargs)
+            return pd.DataFrame(columns=["device", "sensor", "time", "value"])
+
+    config = _config()
+    now = datetime(2025, 4, 2, tzinfo=UTC)
+
+    result = await moisture.load_fused(FakeProvider(), config, now=now)
+
+    assert calls["bucket"] == pd.Timedelta(hours=1)
+    assert calls["device_names"] == list(PROBES)
+    hours = len(result.fused)
+    assert calls["limit"] >= hours * len(PROBES)
+
+
+def test_quality_table_shares_add_up_and_reasons_are_counted():
+    config = _config()
+    raw = _probes(_truth())
+    raw.loc["2025-06-01":"2025-06-03", "p-c"] = 0.0
+    result = fuse(raw, config)
+    start, end = result.fused.index[0], result.fused.index[-1]
+
+    table = moisture.quality_table(result, start, end)
+
+    assert table["share"].sum() == pytest.approx(1.0, abs=0.02)
+    assert table.loc["p-c", DROPOUT] > 0
+    assert (table["used_h"] + table.drop(columns=["used_h", "dry_ref", "wet_ref", "share"])
+            .sum(axis=1) == len(result.fused)).all()
+
+
+@pytest.mark.asyncio
+async def test_irrigation_page_renders_the_fused_stream(monkeypatch):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from wp6_data.blue.routes import irrigation
+    from wp6_data.shared.auth import verify_session_user
+    from wp6_data.shared.templates.config import configure_dashboard
+
+    configure_dashboard("blue")
+    truth = _truth()
+    probes = _probes(truth)
+    rows = probes.stack().rename("value").reset_index()
+    rows.columns = ["time", "device", "value"]
+
+    class FakeProvider:
+        async def fetch_data(self, **kwargs):
+            return rows
+
+    monkeypatch.setattr(irrigation, "_provider", FakeProvider())
+    monkeypatch.setattr(irrigation, "load_config", lambda: _config(history_start="2025-04-01"))
+    irrigation._fused_cache.clear()
+
+    app = FastAPI()
+    app.include_router(irrigation.router)
+    app.dependency_overrides[verify_session_user] = lambda: "test-user"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/irrigation?year=2025")
+
+    irrigation._fused_cache.clear()
+    assert response.status_code == 200
+    assert "Fused pot moisture" in response.text
+    assert "Probe quality 2025" in response.text
+    for probe in PROBES:
+        assert probe in response.text
