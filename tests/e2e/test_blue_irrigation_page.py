@@ -28,6 +28,11 @@ async def test_irrigation_page_fuses_readings_from_the_database(monkeypatch):
     monkeypatch.setattr(irrigation, "load_config", lambda: config)
     irrigation._fused_cache.clear()
 
+    async def no_weather():
+        raise ConnectionError("no network in e2e")
+
+    monkeypatch.setattr(irrigation, "irrigation_weather", no_weather)
+
     readings = [
         {
             "device_name": probe,

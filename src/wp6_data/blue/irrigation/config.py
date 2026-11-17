@@ -36,6 +36,14 @@ class FusionParams(_Strict):
         return self
 
 
+class RainParams(_Strict):
+    station_device: str
+    station_sensor: str
+    check_window_days: int
+    min_reference_mm: float
+    min_ratio: float
+
+
 class Exclusion(_Strict):
     probe: str
     start: datetime
@@ -48,6 +56,7 @@ class IrrigationConfig(_Strict):
     sensor: str
     history_start: date
     fusion: FusionParams
+    rain: RainParams
     exclude: tuple[Exclusion, ...] = ()
 
     @model_validator(mode="after")
@@ -59,11 +68,11 @@ class IrrigationConfig(_Strict):
 
 
 def parse_config(raw: dict, known_devices: set[str]) -> IrrigationConfig:
-    """Validate *raw*; every probe must be a device ``metadata.yaml`` declares."""
+    """Validate *raw*; every probe and the rain gauge must be devices ``metadata.yaml`` declares."""
     config = IrrigationConfig(**raw)
-    missing = set(config.probes) - known_devices
+    missing = (set(config.probes) | {config.rain.station_device}) - known_devices
     if missing:
-        raise ValueError(f"probes not declared in metadata.yaml: {sorted(missing)}")
+        raise ValueError(f"devices not declared in metadata.yaml: {sorted(missing)}")
     return config
 
 

@@ -13,6 +13,7 @@ import html
 from datetime import UTC, date, datetime, time
 from typing import Annotated
 
+import pandas as pd
 import plotly.graph_objects as go
 import structlog
 from cachetools import TTLCache
@@ -22,7 +23,15 @@ from plotly.subplots import make_subplots
 
 from wp6_data.blue.irrigation.config import load_config
 from wp6_data.blue.irrigation.moisture import FusedMoisture, load_fused, quality_table
+from wp6_data.blue.irrigation.weather import (
+    FORECAST,
+    OPEN_METEO,
+    STATION,
+    IrrigationWeather,
+    load_weather,
+)
 from wp6_data.blue.provider import BlueSensorProvider
+from wp6_data.config import Settings
 from wp6_data.shared import render_card, render_page, render_table
 from wp6_data.shared.auth import verify_session_user
 
@@ -35,9 +44,18 @@ PAGE_TITLE = "SPoHF Blue - Irrigation"
 #: The fused stream is rebuilt from the whole history (so the per-probe scale
 #: is stable). Readings arrive every ~20 minutes, so a short cache is fresh
 #: enough and keeps paging between seasons cheap.
-_fused_cache: TTLCache = TTLCache(maxsize=1, ttl=15 * 60)
+_fused_cache: TTLCache = TTLCache(maxsize=2, ttl=15 * 60)
 
 _provider = BlueSensorProvider()
+settings = Settings()
+
+#: Rain bar colour per source: the gauge, Open-Meteo standing in for it, forecast.
+RAIN_COLOURS = {STATION: "#0ea5e9", OPEN_METEO: "#94a3b8", FORECAST: "#cbd5e1"}
+RAIN_LABELS = {
+    STATION: "Rain, on-site gauge",
+    OPEN_METEO: "Rain, Open-Meteo (gauge not trusted)",
+    FORECAST: "Rain, forecast",
+}
 
 IRRIGATION_CSS = """
     .season-toggle { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -45,6 +63,19 @@ IRRIGATION_CSS = """
     .stats-grid article { flex: 1; min-width: 140px; text-align: center; padding: 0.5rem; }
     .stat-value { font-size: 1.5rem; font-weight: bold; }
 """
+
+
+async def irrigation_weather() -> IrrigationWeather:
+    """Rain (fused gauge/Open-Meteo), ET0 and the forecast, cached like the moisture."""
+    cached = _fused_cache.get("weather")
+    if cached is None:
+        cached = await load_weather(
+            _provider, load_config(),
+            latitude=settings.blue_weather_lat, longitude=settings.blue_weather_lon,
+            today=datetime.now(UTC).date(),
+        )
+        _fused_cache["weather"] = cached
+    return cached
 
 
 async def fused_moisture() -> FusedMoisture:
@@ -65,14 +96,41 @@ def _season_toggle(years: list[int], active: int) -> str:
     return f'<nav class="season-toggle">{links}</nav>'
 
 
-def _chart(result: FusedMoisture, start: datetime, end: datetime) -> str:
+def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datetime, row: int):
+    hours = pd.concat([weather.actual, weather.forecast]).loc[start:end]
+    if hours.empty:
+        return
+    day = hours.index.floor("D")
+    rain = hours.groupby([day, "rain_source"])["rain_mm"].sum().unstack(fill_value=0.0)
+    for source, colour in RAIN_COLOURS.items():
+        if source in rain:
+            fig.add_trace(go.Bar(
+                x=rain.index, y=rain[source], name=RAIN_LABELS[source],
+                marker_color=colour, hovertemplate="%{y:.1f} mm<extra></extra>",
+            ), row=row, col=1)
+    et0 = hours.groupby(day)["et0_mm"].sum()
+    fig.add_trace(go.Scatter(
+        x=et0.index, y=et0, mode="lines", name="Reference ET0",
+        line={"color": "#f59e0b", "width": 1.5}, hovertemplate="%{y:.1f} mm<extra></extra>",
+    ), row=row, col=1)
+    fig.update_yaxes(title_text="mm / day", rangemode="tozero", row=row, col=1)
+
+
+def _chart(
+    result: FusedMoisture,
+    weather: IrrigationWeather | None,
+    start: datetime,
+    end: datetime,
+) -> str:
     fused = result.fused.loc[start:end]
     low = result.low.loc[start:end]
     high = result.high.loc[start:end]
     coverage = result.coverage.loc[start:end]
 
+    rows = 3 if weather is not None else 2
+    heights = [0.58, 0.27, 0.15] if weather is not None else [0.78, 0.22]
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True, row_heights=[0.78, 0.22], vertical_spacing=0.04,
+        rows=rows, cols=1, shared_xaxes=True, row_heights=heights, vertical_spacing=0.04,
     )
     fig.add_trace(go.Scatter(
         x=high.index, y=high, mode="lines", line={"width": 0},
@@ -87,14 +145,17 @@ def _chart(result: FusedMoisture, start: datetime, end: datetime) -> str:
         x=fused.index, y=fused, mode="lines", line={"color": "#2563eb", "width": 2},
         name="Fused pot moisture", hovertemplate="%{y:.2f}<extra></extra>",
     ), row=1, col=1)
+    fig.update_yaxes(title_text="relative (0 dry – 1 wet)", row=1, col=1)
+    if weather is not None:
+        _weather_traces(fig, weather, start, end, row=2)
     fig.add_trace(go.Scatter(
         x=coverage.index, y=coverage, mode="lines", line={"color": "#64748b", "shape": "hv"},
         name="Probes used", hovertemplate="%{y} probes<extra></extra>",
-    ), row=2, col=1)
-    fig.update_yaxes(title_text="relative (0 dry – 1 wet)", row=1, col=1)
-    fig.update_yaxes(title_text="probes", rangemode="tozero", row=2, col=1)
+    ), row=rows, col=1)
+    fig.update_yaxes(title_text="probes", rangemode="tozero", row=rows, col=1)
     fig.update_layout(
-        height=560, margin={"l": 60, "r": 20, "t": 20, "b": 40},
+        height=640 if weather is not None else 560,
+        margin={"l": 60, "r": 20, "t": 20, "b": 40}, barmode="stack",
         legend={"orientation": "h", "y": -0.12}, hovermode="x unified",
     )
     return fig.to_html(include_plotlyjs="cdn", full_html=False)
@@ -122,6 +183,13 @@ async def irrigation_page(
             PAGE_TITLE, "<h1>Irrigation</h1><p>Pot moisture could not be loaded.</p>",
             show_back_link=True, back_url="/", show_source_indicator=False,
         )
+
+    try:
+        weather: IrrigationWeather | None = await irrigation_weather()
+    except Exception:
+        # The moisture stands on its own; weather is context, not a dependency.
+        log.warning("irrigation_weather_failed", exc_info=True)
+        weather = None
 
     has_data = result.coverage[result.coverage > 0]
     if has_data.empty:
@@ -154,6 +222,9 @@ async def irrigation_page(
         "of the probes that passed the quality checks, and the band shows how far they "
         "spread. Probes are dropped automatically while they read zero (dry peat "
         "losing contact), spike, or stop moving with the others.</p>"
+        "<p>Rain comes from the on-site gauge, which catches local showers. Where the "
+        "gauge is under-reading for weeks (a fault), Open-Meteo stands in, and its "
+        "bars are grey. ET0 is the reference evaporation demand of the day.</p>"
     )
 
     body = (
@@ -161,7 +232,7 @@ async def irrigation_page(
         + explainer
         + stats
         + _season_toggle(years, year)
-        + render_card(f"Pot moisture {year}", _chart(result, start, end))
+        + render_card(f"Pot moisture and weather {year}", _chart(result, weather, start, end))
         + render_card(
             f"Probe quality {year}",
             _quality_html(result, start, end),

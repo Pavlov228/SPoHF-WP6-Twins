@@ -136,7 +136,7 @@ async def gdd_tracker(
     # Fetch modeled weather once (archive + bridge actuals, plus the forecast).
     # Cached ~1h per location, so base/biofix changes don't re-hit the API.
     try:
-        df, future_forecasts = await get_weather_hours(
+        df, future_hours = await get_weather_hours(
             settings.blue_weather_lat, settings.blue_weather_lon, today,
         )
     except Exception as e:
@@ -204,12 +204,10 @@ async def gdd_tracker(
     if year == current_year and year in year_curves:
         try:
             primary = year_curves[year]["df"]
-            if future_forecasts and not primary.empty:
+            if not future_hours.empty and not primary.empty:
                 last_actual = primary["date"].iloc[-1]
-                future = [
-                    f for f in future_forecasts if f.date > last_actual
-                ]
-                if future:
+                future = future_hours[future_hours["time"].dt.date > last_actual]
+                if not future.empty:
                     cum_start = primary["cumulative_gdd"].iloc[-1]
                     forecast_df = gdd_from_forecasts(
                         future, base_temp=base,

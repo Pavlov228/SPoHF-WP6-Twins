@@ -36,7 +36,10 @@ def _fake_actual_df():
 @pytest.mark.e2e
 async def test_gdd_page_uses_openmeteo_and_hides_source_toggle(monkeypatch):
     async def _fake_weather(latitude, longitude, today):
-        return _fake_actual_df(), []  # actuals only, no forecast days
+        import pandas as pd
+
+        no_forecast = pd.DataFrame(columns=["time", "value"])
+        return _fake_actual_df(), no_forecast
 
     monkeypatch.setattr(gdd_route, "get_weather_hours", _fake_weather)
 

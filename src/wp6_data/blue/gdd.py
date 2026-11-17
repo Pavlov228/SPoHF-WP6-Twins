@@ -14,9 +14,8 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-from cachetools import TTLCache
 
-from wp6_data.shared.weather import DailyForecast, OpenMeteoClient
+from wp6_data.blue.field_weather import field_weather
 
 DEFAULT_BASE_TEMP = 5.0  # °C, European convention; biofix = Jan 1
 DEFAULT_CHILL_THRESHOLD = 7.2  # °C — hours below this count as chill hours
@@ -29,74 +28,39 @@ TEMP_MIN_PLAUSIBLE = -40.0
 TEMP_MAX_PLAUSIBLE = 60.0
 
 # --- OpenMeteo weather source for GDD --------------------------------------
-# GDD tracks modeled outdoor air temperature at the farm, not an on-site sensor
-# (the sensor feed was only fresh via yookr-direct; see ADR-less decision in
-# issues/023). The archive (ERA5) lags ~5 days, so the forecast endpoint's
-# past_days bridges the recent tail up to today and also supplies the future.
+# GDD tracks modelled outdoor air temperature at the farm, not an on-site sensor
+# (the sensor feed was only fresh via yookr-direct; see issues/023). The
+# archive/bridge/forecast stitching is shared with the irrigation twin in
+# :mod:`wp6_data.blue.field_weather`.
 GDD_START_YEAR = 2024
-FORECAST_DAYS = 14
-BRIDGE_PAST_DAYS = 10  # forecast days covering the ERA5 tail (~5d) + margin
 WEATHER_SOURCE_LABEL = "OpenMeteo · Compass Agro"
+TEMPERATURE_VAR = "temperature_2m"
 
-# Per-(lat, lon) cache of the fetched weather, so base/biofix changes recompute
-# without re-hitting the API. TTL ~1h: the archive is immutable, only the recent
-# tail moves. (2.5 yr of hourly data is one ~1.3s call.)
-_weather_cache: TTLCache = TTLCache(maxsize=8, ttl=3600)
+
+def _time_value(hours: pd.DataFrame) -> pd.DataFrame:
+    """Hourly frame → the ``time``/``value`` shape sensor readings have."""
+    column = hours[TEMPERATURE_VAR].dropna()
+    return pd.DataFrame({"time": column.index, "value": column.to_numpy()})
 
 
 async def get_weather_hours(
     latitude: float,
     longitude: float,
     today: date,
-) -> tuple[pd.DataFrame, list[DailyForecast]]:
-    """Fetch GDD weather from OpenMeteo only (cached ~1h per location).
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Modelled air temperature at the farm as ``(actual, forecast)``.
 
-    Returns ``(actual_hourly_df, future_daily_forecasts)``:
+    Both are ``time``/``value`` hourly frames, shaped like sensor readings, so
+    they flow straight into :func:`calculate_daily_gdd` / :func:`gdd_from_forecasts`:
 
-    - ``actual_hourly_df``: ``time``/``value`` hourly temperatures from
-      ``GDD_START_YEAR-01-01`` through ``today`` — the ERA5 archive plus the
-      forecast ``past_days`` bridge for the recent days the archive lacks
-      (archive wins on overlap). Shaped exactly like sensor readings so it
-      flows straight into :func:`calculate_daily_gdd`.
-    - ``future_daily_forecasts``: ``DailyForecast`` for days strictly after
-      ``today``, for :func:`gdd_from_forecasts`.
+    - ``actual``: from ``GDD_START_YEAR-01-01`` through ``today``
+    - ``forecast``: hours strictly after ``today``
     """
-    key = (round(latitude, 4), round(longitude, 4))
-    cached = _weather_cache.get(key)
-    if cached is not None:
-        return cached
-
-    client = OpenMeteoClient(latitude=latitude, longitude=longitude)
-    try:
-        archive = await client.get_historical(date(GDD_START_YEAR, 1, 1), today)
-        recent_future = await client.get_forecast(
-            days=FORECAST_DAYS, past_days=BRIDGE_PAST_DAYS,
-        )
-    finally:
-        await client.close()
-
-    # Actual hours: archive first, then bridge fills only the days/hours the
-    # archive is missing (archive = ERA5 reanalysis, preferred over forecast).
-    actual: dict = {}
-    for fc in archive:
-        for h in fc.hourly:
-            if h.datetime.date() <= today:
-                actual[h.datetime] = h.temperature
-    for fc in recent_future:
-        if fc.date <= today:
-            for h in fc.hourly:
-                if h.datetime.date() <= today:
-                    actual.setdefault(h.datetime, h.temperature)
-
-    actual_df = pd.DataFrame(
-        [{"time": t, "value": v} for t, v in sorted(actual.items())],
-        columns=["time", "value"],
+    weather = await field_weather(
+        [TEMPERATURE_VAR], latitude=latitude, longitude=longitude,
+        start=date(GDD_START_YEAR, 1, 1), today=today,
     )
-    future = [fc for fc in recent_future if fc.date > today]
-
-    result = (actual_df, future)
-    _weather_cache[key] = result
-    return result
+    return _time_value(weather.actual), _time_value(weather.forecast)
 
 
 def calculate_daily_gdd(
@@ -162,47 +126,23 @@ def cumulative_gdd_from_biofix(
 
 
 def gdd_from_forecasts(
-    forecasts: list[DailyForecast],
+    forecast: pd.DataFrame,
     base_temp: float = DEFAULT_BASE_TEMP,
     cumulative_start: float = 0.0,
 ) -> pd.DataFrame:
-    """Calculate daily GDD from OpenMeteo forecast objects.
+    """Daily GDD over forecast hours, continuing a cumulative curve.
 
     Args:
-        forecasts: List of DailyForecast (from OpenMeteoClient).
+        forecast: ``time``/``value`` hourly temperatures (see :func:`get_weather_hours`).
         base_temp: Base temperature for GDD calculation.
-        cumulative_start: Starting value for cumulative GDD
-            (use the last actual cumulative value to continue the curve).
+        cumulative_start: The last actual cumulative value, so the curve continues.
 
     Returns:
-        DataFrame with same columns as calculate_daily_gdd output.
+        DataFrame with the same columns as :func:`calculate_daily_gdd`.
     """
-    rows = []
-    for fc in forecasts:
-        if not fc.hourly:
-            continue
-        temps = [h.temperature for h in fc.hourly]
-        t_min = min(temps)
-        t_max = max(temps)
-        t_avg = (t_min + t_max) / 2.0
-        daily_gdd = max(0.0, t_avg - base_temp)
-        rows.append({
-            "date": fc.date,
-            "t_min": t_min,
-            "t_max": t_max,
-            "t_avg": t_avg,
-            "daily_gdd": daily_gdd,
-        })
-
-    if not rows:
-        return pd.DataFrame(
-            columns=["date", "t_min", "t_max", "t_avg",
-                      "daily_gdd", "cumulative_gdd"],
-        )
-
-    df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
-    df["cumulative_gdd"] = cumulative_start + df["daily_gdd"].cumsum()
-    return df
+    daily = calculate_daily_gdd(forecast, base_temp=base_temp)
+    daily["cumulative_gdd"] = cumulative_start + daily["daily_gdd"].cumsum()
+    return daily
 
 
 def calculate_daily_chill_hours(

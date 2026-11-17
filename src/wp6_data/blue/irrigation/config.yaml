@@ -45,6 +45,19 @@ fusion:
   consensus_min_corr: 0.3
   consensus_min_probes: 3
 
+# Rain at the field. The on-site gauge catches local showers that Open-Meteo's
+# reanalysis underestimates, but it has failed for whole months (research note
+# §5), so it is checked against Open-Meteo over a rolling window. Where
+# Open-Meteo saw at least `min_reference_mm` and the gauge less than
+# `min_ratio` of it, the gauge is treated as faulty for that stretch and
+# Open-Meteo stands in.
+rain:
+  station_device: "weatherstation"
+  station_sensor: "precipitation"
+  check_window_days: 14
+  min_reference_mm: 5.0
+  min_ratio: 0.3
+
 # Manual override for a fault the mechanical checks miss. Prefer improving a
 # check over adding an entry here. Entries: {probe, start, end, reason}.
 exclude: []

@@ -178,9 +178,11 @@ def test_the_shipped_config_names_only_known_devices():
 
 def test_unknown_fusion_knobs_are_rejected():
     raw = _raw_config()
+    known = set(raw["probes"]) | {raw["rain"]["station_device"]}
+    parse_config(raw, known)  # valid as shipped
     raw["fusion"] = raw["fusion"] | {"flor": 2.0}
-    with pytest.raises(ValueError):
-        parse_config(raw, set(raw["probes"]))
+    with pytest.raises(ValueError, match="flor"):
+        parse_config(raw, known)
 
 
 @pytest.mark.asyncio
@@ -240,6 +242,12 @@ async def test_irrigation_page_renders_the_fused_stream(monkeypatch):
     monkeypatch.setattr(irrigation, "_provider", FakeProvider())
     monkeypatch.setattr(irrigation, "load_config", lambda: _config(history_start="2025-04-01"))
     irrigation._fused_cache.clear()
+
+    async def weather_down():
+        raise ConnectionError("open-meteo unreachable")
+
+    # Weather is context: its outage must not take the moisture page down.
+    monkeypatch.setattr(irrigation, "irrigation_weather", weather_down)
 
     app = FastAPI()
     app.include_router(irrigation.router)

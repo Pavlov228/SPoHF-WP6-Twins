@@ -235,6 +235,16 @@ once the event log is confirmed.
     where the station is flat while Open-Meteo shows rain**. Flag the
     substitution in the coverage. This is the same idea as the moisture
     quality mask.
+  - Implemented (issue 066) as a centred 14-day check: if Open-Meteo saw at
+    least **5 mm** and the gauge less than **30 %** of it, the gauge is
+    replaced for those days. The first threshold, 10 mm, missed the gauge's
+    death around **21 Jun 2026**: July's showers were only 1–3 mm. Replaced
+    so far: Dec 2025, most of Feb 2026, and Jul–Oct 2026 (in part).
+  - **Open:** the gauge read **47.3 mm on 11 Nov 2026**, right after its
+    outage, against Open-Meteo's 4.5 mm. That is either a cleaned or repaired
+    gauge emptying what it collected, or a genuinely local downpour. The
+    window check can't tell these apart, so the reading is kept. Worth asking
+    the farm.
 
 ## Open questions
 
