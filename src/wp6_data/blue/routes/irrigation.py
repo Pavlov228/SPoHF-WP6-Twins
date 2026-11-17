@@ -3,7 +3,7 @@
 A top-level blue feature with its own home-page card, like ``/gdd``, so it
 self-guards auth rather than inheriting it from the monitor router.
 
-First slice (issue 065): one fused pot-moisture stream, and how each probe
+First slice (issue 065): one fused soil-moisture stream, and how each probe
 contributed to it. Forecast, advice and the simulator build on this page.
 """
 
@@ -116,12 +116,35 @@ def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datet
     fig.update_yaxes(title_text="mm / day", rangemode="tozero", row=row, col=1)
 
 
-def _chart(
+def band_polygons(low: pd.Series, high: pd.Series) -> tuple[list, list]:
+    """A spread band as one closed polygon per stretch without gaps.
+
+    Plotly's ``fill="tonexty"`` between two traces ignores gaps: across a
+    missing stretch it joins the fill to whatever point comes next, which draws
+    slanted wedges that are not data. Instead, each contiguous stretch becomes
+    its own polygon (upper edge forward, lower edge back), and ``None``
+    separates them so ``fill="toself"`` closes each one on its own.
+    """
+    valid = low.notna() & high.notna()
+    stretch = (valid != valid.shift()).cumsum()
+    xs: list = []
+    ys: list = []
+    for _, idx in valid[valid].groupby(stretch[valid]).groups.items():
+        lo, hi = low.loc[idx], high.loc[idx]
+        if xs:
+            xs.append(None)
+            ys.append(None)
+        xs += [*hi.index, *lo.index[::-1]]
+        ys += [*hi.to_numpy(), *lo.to_numpy()[::-1]]
+    return xs, ys
+
+
+def _figure(
     result: FusedMoisture,
     weather: IrrigationWeather | None,
     start: datetime,
     end: datetime,
-) -> str:
+) -> go.Figure:
     fused = result.fused.loc[start:end]
     low = result.low.loc[start:end]
     high = result.high.loc[start:end]
@@ -132,18 +155,15 @@ def _chart(
     fig = make_subplots(
         rows=rows, cols=1, shared_xaxes=True, row_heights=heights, vertical_spacing=0.04,
     )
+    band_x, band_y = band_polygons(low, high)
     fig.add_trace(go.Scatter(
-        x=high.index, y=high, mode="lines", line={"width": 0},
-        hoverinfo="skip", showlegend=False,
-    ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=low.index, y=low, mode="lines", line={"width": 0}, fill="tonexty",
+        x=band_x, y=band_y, mode="lines", line={"width": 0}, fill="toself",
         fillcolor="rgba(37, 99, 235, 0.15)", name="Probe spread (25–75 %)",
         hoverinfo="skip",
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=fused.index, y=fused, mode="lines", line={"color": "#2563eb", "width": 2},
-        name="Fused pot moisture", hovertemplate="%{y:.2f}<extra></extra>",
+        name="Fused soil moisture", hovertemplate="%{y:.2f}<extra></extra>",
     ), row=1, col=1)
     fig.update_yaxes(title_text="relative (0 dry – 1 wet)", row=1, col=1)
     if weather is not None:
@@ -158,7 +178,16 @@ def _chart(
         margin={"l": 60, "r": 20, "t": 20, "b": 40}, barmode="stack",
         legend={"orientation": "h", "y": -0.12}, hovermode="x unified",
     )
-    return fig.to_html(include_plotlyjs="cdn", full_html=False)
+    return fig
+
+
+def _chart(
+    result: FusedMoisture,
+    weather: IrrigationWeather | None,
+    start: datetime,
+    end: datetime,
+) -> str:
+    return _figure(result, weather, start, end).to_html(include_plotlyjs="cdn", full_html=False)
 
 
 def _quality_html(result: FusedMoisture, start: datetime, end: datetime) -> str:
@@ -180,7 +209,7 @@ async def irrigation_page(
     except Exception:
         log.exception("irrigation_fuse_failed")
         return render_page(
-            PAGE_TITLE, "<h1>Irrigation</h1><p>Pot moisture could not be loaded.</p>",
+            PAGE_TITLE, "<h1>Irrigation</h1><p>Soil moisture could not be loaded.</p>",
             show_back_link=True, back_url="/", show_source_indicator=False,
         )
 
@@ -194,7 +223,7 @@ async def irrigation_page(
     has_data = result.coverage[result.coverage > 0]
     if has_data.empty:
         return render_page(
-            PAGE_TITLE, "<h1>Irrigation</h1><p>No pot-moisture readings yet.</p>",
+            PAGE_TITLE, "<h1>Irrigation</h1><p>No soil-moisture readings yet.</p>",
             show_back_link=True, back_url="/", show_source_indicator=False,
         )
 
@@ -208,7 +237,7 @@ async def irrigation_page(
     stats = f"""
         <div class="stats-grid">
             <article><div class="stat-value">{result.fused.loc[latest_at]:.2f}</div>
-                <small>Pot moisture now (0 dry – 1 wet)</small></article>
+                <small>Soil moisture now (0 dry – 1 wet)</small></article>
             <article><div class="stat-value" id="probes-now">{probes_now}</div>
                 <small>Probes used now</small></article>
             <article><div class="stat-value">{latest_at:%d %b %H:%M}</div>
@@ -216,7 +245,7 @@ async def irrigation_page(
         </div>"""
 
     explainer = (
-        "<p>The pot probes agree on <em>how</em> the pots wet and dry, but not on the "
+        "<p>The soil probes agree on <em>how</em> the soil wets and dries, but not on the "
         "level, so each is put on its own scale: <strong>0</strong> is its driest "
         "normal reading and <strong>1</strong> its wettest. The line is the median "
         "of the probes that passed the quality checks, and the band shows how far they "
@@ -232,7 +261,7 @@ async def irrigation_page(
         + explainer
         + stats
         + _season_toggle(years, year)
-        + render_card(f"Pot moisture and weather {year}", _chart(result, weather, start, end))
+        + render_card(f"Soil moisture and weather {year}", _chart(result, weather, start, end))
         + render_card(
             f"Probe quality {year}",
             _quality_html(result, start, end),

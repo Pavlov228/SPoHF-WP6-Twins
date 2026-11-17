@@ -1,6 +1,6 @@
-"""One fused pot-moisture stream from blue's disagreeing soil probes.
+"""One fused soil-moisture stream from blue's disagreeing soil probes.
 
-The probes agree on *how* the pots wet and dry but not on the level: offsets of
+The probes agree on *how* the soil wets and dries but not on the level: offsets of
 about 10 %VWC, and readings far below what peat holds, which points at a
 mineral-soil calibration (docs/research/blueberry-irrigation.md §2, §4). So no
 absolute value is trusted. Each probe is masked mechanically, put on its own
@@ -15,7 +15,7 @@ Mask reasons, applied in this order (the first one wins):
 - ``missing``: no reading that hour.
 - ``excluded``: a manual override from the config.
 - ``dropout``: below the floor, or within the padding of such a run. Drying
-  peat shrinks away from the probe, so these are lost contact, not dry pots.
+  peat shrinks away from the probe, so these are lost contact, not dry soil.
 - ``spike``: a one-off jump that a centred Hampel filter rejects. A rain step
   is not a spike, because the level stays where it jumped to.
 - ``disagrees``: the probe's day-to-day changes stopped tracking the median
@@ -133,7 +133,7 @@ def mask_disagreement(
     """Mark the stretches where a probe's daily changes stop tracking the rest.
 
     A level offset is fine, since scaling absorbs it. A probe that rises when
-    the others fall is not measuring the same pot water. Each probe is compared
+    the others fall is not measuring the same soil water. Each probe is compared
     against the median of the *other* probes, so one bad probe cannot pull the
     reference towards itself.
     """

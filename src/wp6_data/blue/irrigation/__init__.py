@@ -1,1 +1,1 @@
-"""Blue irrigation twin: fused pot moisture, and (later) forecast, advice and simulator."""
+"""Blue irrigation twin: fused soil moisture, and (later) forecast, advice and simulator."""

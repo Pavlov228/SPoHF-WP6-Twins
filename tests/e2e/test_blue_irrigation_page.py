@@ -60,7 +60,7 @@ async def test_irrigation_page_fuses_readings_from_the_database(monkeypatch):
         await close_pool()
 
     assert response.status_code == 200
-    assert "Fused pot moisture" in response.text
+    assert "Fused soil moisture" in response.text
     assert f'id="probes-now">{len(PROBES)} / {len(PROBES)}<' in response.text
     for probe in PROBES:
         assert probe in response.text

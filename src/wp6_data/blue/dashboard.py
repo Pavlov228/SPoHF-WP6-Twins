@@ -47,7 +47,7 @@ def _irrigation_card() -> str:
         "Irrigation",
         '<a href="/irrigation" role="button">Irrigation Dashboard</a>',
         description=(
-            "Pot moisture fused from the soil probes: the basis for when and how "
+            "Soil moisture fused from the soil probes: the basis for when and how "
             "much to water."
         ),
         card_class="card-bg card-bg-growth",

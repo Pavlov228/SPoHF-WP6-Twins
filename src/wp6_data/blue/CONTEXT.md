@@ -68,22 +68,22 @@ A kind of manual measurement. In source files this is a free-text column
   — bud count. **Flowering score** (1–10) — flower count. Phenology scores,
   2025+ only.
 
-### Pot probe
-A soil-moisture sensor in the substrate of a plant's pot. The plants grow in
-large peat-filled pots that are buried in a soil bed, and their roots have
-grown out into the bed. The probes sit in the pot but **not next to the
-drippers**, which is why drip watering barely registers on them while rain
-does. They read %VWC on what is very likely a mineral-soil calibration, so
-their absolute values are not trusted, only how they change.
+### Soil probe
+A soil-moisture sensor in a plant's peat substrate. The plants grow in peat
+set into a soil bed, and their roots have grown out into the bed. The probes
+sit in the peat but **not next to the drippers**, which is why drip watering
+barely registers on them while rain does. They read %VWC on what is very
+likely a mineral-soil calibration, so their absolute values are not trusted,
+only how they change.
 
-### Fused pot moisture
-The single moisture stream the irrigation twin works with. Each pot probe is
+### Fused soil moisture
+The single moisture stream the irrigation twin works with. Each soil probe is
 mechanically masked (dropout, spike, disagreeing with the others), then put
 on its **own** scale, where 0 is its dry reference and 1 its wet reference
 (robust quantiles of its whole clean history). The masked, scaled probes are
 then fused by median. It is **relative**, not %VWC, and it always comes with
 its **coverage**: how many probes contributed that hour. A dropout reading
-(about 0) means the probe lost contact with drying peat, not a dry pot.
+(about 0) means the probe lost contact with drying peat, not dry soil.
 
 ## Data sources
 

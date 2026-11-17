@@ -1,6 +1,6 @@
-"""Fused pot moisture: synthetic probes with known faults fuse back to the truth.
+"""Fused soil moisture: synthetic probes with known faults fuse back to the truth.
 
-Every probe sees the same pot water through its own offset and gain, which is
+Every probe sees the same soil water through its own offset and gain, which is
 the situation the research note describes. The fusion should undo the
 offset/gain and drop the faults, and it should report what it dropped and why.
 """
@@ -47,7 +47,7 @@ def _config(**overrides) -> IrrigationConfig:
 
 
 def _truth() -> pd.Series:
-    """Pot water in 0..1: dry-downs reset by a wetting every 9 days, plus a daily wiggle."""
+    """Soil water in 0..1: dry-downs reset by a wetting every 9 days, plus a daily wiggle."""
     index = pd.date_range("2025-04-01", periods=DAYS * 24, freq="h", tz=UTC)
     hours = np.arange(len(index))
     since_wetting = hours % (9 * 24)
@@ -257,7 +257,28 @@ async def test_irrigation_page_renders_the_fused_stream(monkeypatch):
 
     irrigation._fused_cache.clear()
     assert response.status_code == 200
-    assert "Fused pot moisture" in response.text
+    assert "Fused soil moisture" in response.text
     assert "Probe quality 2025" in response.text
     for probe in PROBES:
         assert probe in response.text
+
+
+def test_spread_band_never_bridges_a_gap():
+    """Plotly's tonexty fill drew wedges across missing stretches; each
+    stretch must be its own closed polygon, separated by a break."""
+    from wp6_data.blue.routes.irrigation import band_polygons
+
+    index = pd.date_range("2025-06-01", periods=10, freq="h", tz=UTC)
+    low = pd.Series([0.2, 0.2, 0.2, np.nan, np.nan, 0.3, 0.3, 0.3, 0.3, 0.3], index=index)
+    high = low + 0.1
+
+    xs, ys = band_polygons(low, high)
+
+    breaks = [i for i, x in enumerate(xs) if x is None]
+    assert len(breaks) == 1
+    first, second = xs[:breaks[0]], xs[breaks[0] + 1:]
+    # Each polygon walks its stretch forward along the top and back along the bottom.
+    assert first == [*index[:3], *index[:3][::-1]]
+    assert second == [*index[5:], *index[5:][::-1]]
+    assert ys[breaks[0]] is None
+    assert np.allclose(ys[:3], high.iloc[:3]) and np.allclose(ys[3:6], low.iloc[:3][::-1])

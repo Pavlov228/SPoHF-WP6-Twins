@@ -28,7 +28,7 @@ def _day(value: str) -> date:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wp6-blue-irrigation", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    fuse = sub.add_parser("fuse", help="fused pot moisture and per-probe quality")
+    fuse = sub.add_parser("fuse", help="fused soil moisture and per-probe quality")
     fuse.add_argument("--start", type=_day, help="first day shown (default: 30 days ago)")
     fuse.add_argument("--end", type=_day, help="last day shown (default: today)")
     fuse.add_argument("--csv", type=Path, help="write the hourly fused stream here")
@@ -54,7 +54,7 @@ async def _fuse(args: argparse.Namespace) -> int:
 
     window = result.fused.loc[start:end]
     coverage = result.coverage.loc[start:end]
-    print(f"Fused pot moisture {start_day} .. {end_day} ({len(window)} h)")
+    print(f"Fused soil moisture {start_day} .. {end_day} ({len(window)} h)")
     print(f"  fused: median {window.median():.2f}, min {window.min():.2f}, max {window.max():.2f}")
     print(f"  coverage: median {coverage.median():.0f} probes, "
           f"{int((coverage == 0).sum())} h with none")

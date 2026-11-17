@@ -5,7 +5,7 @@
 # blue/metadata.yaml, which stays the source of truth for what a device is;
 # the loader rejects a name it does not know.
 
-# The soil-moisture probes that sit in the pots. All are in pot substrate, not
+# The soil-moisture probes in the plants' peat substrate. None sits
 # next to a dripper (see docs/research/blueberry-irrigation.md §4.1).
 probes:
   - "SPoHF_EC-BV_rij1"
