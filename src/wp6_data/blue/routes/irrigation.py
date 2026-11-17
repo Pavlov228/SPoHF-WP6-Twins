@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, Response
 from plotly.subplots import make_subplots
 
 from wp6_data.blue.irrigation.config import load_config
+from wp6_data.blue.irrigation.events import load_events
 from wp6_data.blue.irrigation.moisture import (
     DISAGREES,
     DROPOUT,
@@ -54,7 +55,7 @@ PAGE_TITLE = "SPoHF Blue - Irrigation"
 #: The fused stream is rebuilt from the whole history (so the per-probe scale
 #: is stable). Readings arrive every ~20 minutes, so a short cache is fresh
 #: enough and keeps paging between seasons cheap.
-_fused_cache: TTLCache = TTLCache(maxsize=2, ttl=15 * 60)
+_fused_cache: TTLCache = TTLCache(maxsize=3, ttl=15 * 60)
 
 _provider = BlueSensorProvider()
 settings = Settings()
@@ -70,6 +71,15 @@ RAIN_TRACES = {
 
 IRRIGATION_CSS = YEAR_TOGGLE_CSS
 
+
+
+async def irrigation_events() -> pd.DataFrame:
+    """Watering events (one per day), cached like the moisture."""
+    cached = _fused_cache.get("events")
+    if cached is None:
+        cached = await load_events(_provider, load_config(), now=datetime.now(UTC))
+        _fused_cache["events"] = cached
+    return cached
 
 
 async def irrigation_weather() -> IrrigationWeather:
@@ -138,6 +148,40 @@ def _weather_traces(fig, weather: IrrigationWeather, start: datetime, end: datet
     fig.update_yaxes(title_text="mm / day", rangemode="tozero", row=row, col=1)
 
 
+#: Colour of the watering (drip) markers on the soil-moisture panel.
+WATERING_COLOUR = "#16a34a"
+
+
+def _event_traces(fig, events: pd.DataFrame, top: float) -> None:
+    """Each watering as a dotted line over the moisture, with its dose on hover.
+
+    The time is the configured default (the CSV is date-only), so the hover
+    says so. The line spans the moisture panel only, since a drip dose has no
+    place on the rain axis (litres per plant, not mm).
+    """
+    if events.empty:
+        return
+    for when in events.index:
+        fig.add_vline(
+            x=when, line={"color": WATERING_COLOUR, "width": 1, "dash": "dot"}, row=1, col=1,
+        )
+    spread = [
+        f"{lo:.2f}–{hi:.2f} L across treatments" if hi - lo > 1e-6 else "same for all treatments"
+        for lo, hi in zip(events["volume_l_min"], events["volume_l_max"], strict=True)
+    ]
+    fig.add_trace(go.Scatter(
+        x=events.index, y=[top] * len(events), mode="markers", name="Watering (drip)",
+        marker={"symbol": "triangle-down", "size": 10, "color": WATERING_COLOUR},
+        customdata=list(zip(
+            events["volume_l_per_plant"], events["duration_min"], spread, strict=True,
+        )),
+        hovertemplate=(
+            "Drip %{customdata[0]:.2f} L/plant · %{customdata[1]:.0f} min"
+            "<br>%{customdata[2]} · time assumed<extra></extra>"
+        ),
+    ), row=1, col=1)
+
+
 def band_polygons(low: pd.Series, high: pd.Series) -> tuple[list, list]:
     """A spread band as one closed polygon per stretch without gaps.
 
@@ -166,6 +210,7 @@ def _figure(
     weather: IrrigationWeather | None,
     start: datetime,
     end: datetime,
+    events: pd.DataFrame | None = None,
 ) -> go.Figure:
     fused = result.fused.loc[start:end]
     low = result.low.loc[start:end]
@@ -188,6 +233,9 @@ def _figure(
         name="Fused soil moisture", hovertemplate="%{y:.2f}<extra></extra>",
     ), row=1, col=1)
     fig.update_yaxes(title_text="relative (0 dry – 1 wet)", row=1, col=1)
+    if events is not None:
+        top = float(high.max()) if high.notna().any() else 1.0
+        _event_traces(fig, events.loc[start:end], top=top)
     if weather is not None:
         _weather_traces(fig, weather, start, end, row=2)
     fig.add_trace(go.Scatter(
@@ -208,8 +256,10 @@ def _chart(
     weather: IrrigationWeather | None,
     start: datetime,
     end: datetime,
+    events: pd.DataFrame | None = None,
 ) -> str:
-    return _figure(result, weather, start, end).to_html(include_plotlyjs="cdn", full_html=False)
+    fig = _figure(result, weather, start, end, events)
+    return fig.to_html(include_plotlyjs="cdn", full_html=False)
 
 
 #: How each reading is drawn in the per-probe view: used, or dropped and why.
@@ -368,6 +418,12 @@ async def irrigation_page(
         log.warning("irrigation_weather_failed", exc_info=True)
         weather = None
 
+    try:
+        events: pd.DataFrame | None = await irrigation_events()
+    except Exception:
+        log.warning("irrigation_events_failed", exc_info=True)
+        events = None
+
     has_data = result.coverage[result.coverage > 0]
     if has_data.empty:
         return render_page(
@@ -392,13 +448,18 @@ async def irrigation_page(
         "under-read Open-Meteo for weeks (a fault). Its bars then turn red and "
         "Open-Meteo stands in. Gauge hours with impossible values are dropped. ET0 is "
         "the day's reference evaporation demand.</p>"
+        "<p>Green markers are drip watering from the fertigation log. The log has dates "
+        "only, so the time shown is assumed. The probes are not next to the drippers, "
+        "so a watering barely registers on them; rain wets the whole surface.</p>"
     )
 
     body = (
         "<h1>Irrigation</h1>"
         + explainer
         + year_toggle(years, year, lambda y: f"/irrigation?year={y}")
-        + render_card(f"Soil moisture and weather {year}", _chart(result, weather, start, end))
+        + render_card(
+            f"Soil moisture and weather {year}", _chart(result, weather, start, end, events),
+        )
         + render_card(
             f"Probe quality {year}",
             _quality_html(result, start, end) + _probe_details(year),

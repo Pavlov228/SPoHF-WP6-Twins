@@ -66,6 +66,16 @@ rain:
   min_reference_mm: 5.0
   min_ratio: 0.3
 
+# Watering (drip fertigation) events, from the farm's fertigation CSV upload.
+# The CSV is date-only and the doses don't show on the soil probes (research
+# note §4.1), so the clock time is a configured default (the farm waters in
+# the late afternoon), in the field's local time.
+watering:
+  volume_sensor: "volume_ml_per_plant"
+  duration_sensor: "duration_min"
+  default_local_time: "17:00"
+  timezone: "Europe/Amsterdam"
+
 # Manual override for a fault the mechanical checks miss. Prefer improving a
 # check over adding an entry here. Entries: {probe, start, end, reason}.
 exclude: []

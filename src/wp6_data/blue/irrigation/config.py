@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -46,6 +47,18 @@ class RainParams(_Strict):
     min_ratio: float
 
 
+class WateringParams(_Strict):
+    volume_sensor: str
+    duration_sensor: str
+    default_local_time: time
+    timezone: str
+
+    @model_validator(mode="after")
+    def _known_timezone(self) -> WateringParams:
+        ZoneInfo(self.timezone)  # raises for an unknown zone
+        return self
+
+
 class Exclusion(_Strict):
     probe: str
     start: datetime
@@ -60,6 +73,7 @@ class IrrigationConfig(_Strict):
     history_start: date
     fusion: FusionParams
     rain: RainParams
+    watering: WateringParams
     exclude: tuple[Exclusion, ...] = ()
 
     @model_validator(mode="after")
