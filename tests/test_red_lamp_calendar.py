@@ -39,7 +39,8 @@ class TestLampStateGrid:
 
         by_hour = grid.set_index("hour")["state"].to_dict()
         assert by_hour[5] == LampState.LIT
-        assert by_hour[12] == LampState.DAYLIGHT
+        # The sensors alone cannot rule a lamp out under the sun.
+        assert by_hour[12] == LampState.DAYLIGHT_UNKNOWN
         assert by_hour[20] == LampState.DARK
 
     def test_long_day_has_no_lit_hours(self):
@@ -179,3 +180,17 @@ class TestLampStateGridFromLetsGrow:
         assert by_hour.loc[2, "source"] == LAMP_SOURCE_LETSGROW
         assert by_hour.loc[5, "source"] == LAMP_SOURCE_SENSORS
         assert by_hour.loc[5, "state"] == LampState.LIT
+
+    def test_a_sunlit_hour_letsgrow_missed_is_unknown_not_off(self):
+        """An outage must not draw as lamps switched off at midday."""
+        above, canopy = self._bright_winter_day()
+        early = {h: 0.0 for h in range(4)}
+
+        grid = lamp_state_grid(
+            _frame(self.day, above), _frame(self.day, canopy), _on_fraction(self.day, early),
+        )
+
+        by_hour = grid.set_index("hour")
+        assert by_hour.loc[13, "source"] == LAMP_SOURCE_SENSORS
+        assert by_hour.loc[13, "state"] == LampState.DAYLIGHT_UNKNOWN
+        assert by_hour.loc[20, "state"] == LampState.DARK

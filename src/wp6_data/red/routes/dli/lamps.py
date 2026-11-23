@@ -29,12 +29,14 @@ PAGE_TITLE = "SPoHF Red - Lamp Calendar"
 # the least interesting thing on the page.
 STATE_COLOURS = {
     LampState.DARK: "#eceff3",
+    LampState.DAYLIGHT_UNKNOWN: "#a8adb7",
     LampState.DAYLIGHT: "#fbbf24",
     LampState.DAYLIGHT_LIT: "#c026d3",
     LampState.LIT: "#7c3aed",
 }
 STATE_LABELS = {
     LampState.DARK: "Dark (no lamp)",
+    LampState.DAYLIGHT_UNKNOWN: "Daylight, lamps unknown",
     LampState.DAYLIGHT: "Daylight",
     LampState.DAYLIGHT_LIT: "Daylight + lamps",
     LampState.LIT: "Lamps only",
@@ -183,10 +185,12 @@ async def dli_lamps(
             <strong>Lamps</strong>: LetsGrow, Neurath's climate computer, had them on
             for most of the hour. It switches the lamps, so this is the record rather
             than an inference — including on bright winter middays, where the lamp is
-            invisible next to the sun. LetsGrow arrives about two days late; hours
-            after its last delivery fall back to the PAR sensors (canopy above
+            invisible next to the sun. Where LetsGrow has nothing — the two days it
+            runs late, or an outage — the PAR sensors stand in: canopy above
             {LAMP_THRESHOLD:.0f} µmol/m²/s with no sun, or brighter than the roof
-            sensor in daylight). Hover a cell to see which applied.<br/>
+            sensor in daylight, means lamps. They cannot rule the lamps out under a
+            bright sun, so those daylight hours read <strong>lamps unknown</strong>.
+            Hover a cell to see which applied.<br/>
             Gaps are hours with no usable PAR reading, not hours that were dark.
         </small>
     """

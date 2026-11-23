@@ -356,10 +356,11 @@ class LampState(IntEnum):
     daylight, then the two lamp states on top.
     """
 
-    DARK = 1          # no daylight reaching the greenhouse, and no lamp either
-    DAYLIGHT = 2      # sun, and the lamps are off
-    DAYLIGHT_LIT = 3  # sun *and* lamps — winter's supplementary lighting
-    LIT = 4           # canopy is bright while the above-lamp sensor is dark: lamps
+    DARK = 1              # no daylight reaching the greenhouse, and no lamp either
+    DAYLIGHT_UNKNOWN = 2  # sun, and nothing that can say whether the lamps ran
+    DAYLIGHT = 3          # sun, and the lamps are off
+    DAYLIGHT_LIT = 4      # sun *and* lamps — winter's supplementary lighting
+    LIT = 5               # canopy is bright while the above-lamp sensor is dark: lamps
 
 
 def lamp_state_grid(
@@ -391,6 +392,13 @@ def lamp_state_grid(
     its on/off from the switch itself, and only the daylight/dark split comes
     from the roof sensor. Hours after its last delivery, or with no LetsGrow
     at all, keep the sensor reading. ``source`` says which applied, per hour.
+
+    The sensors' verdict is trusted where it is sound: at night canopy light can
+    only be the lamps, and in daylight a canopy brighter than the roof shows
+    them too. What they cannot do is rule the lamps *out* in daylight — 140 µmol
+    of lamp vanishes next to a bright sun — so a sunlit hour with no LetsGrow and
+    no lamp seen is ``DAYLIGHT_UNKNOWN``, not ``DAYLIGHT``. Without that, a
+    LetsGrow outage draws as a week of lamps switched off at midday.
 
     Returns ``date, hour, state, above_par, canopy_par, source``.
     """
@@ -424,8 +432,18 @@ def lamp_state_grid(
     grid["date"] = grid["time"].dt.date
     grid["hour"] = grid["time"].dt.hour
     grid["state"] = np.select(
-        [lamps_on & ~is_daylight, lamps_on & is_daylight, is_daylight],
-        [int(LampState.LIT), int(LampState.DAYLIGHT_LIT), int(LampState.DAYLIGHT)],
+        [
+            lamps_on & ~is_daylight,
+            lamps_on & is_daylight,
+            is_daylight & from_letsgrow,
+            is_daylight,
+        ],
+        [
+            int(LampState.LIT),
+            int(LampState.DAYLIGHT_LIT),
+            int(LampState.DAYLIGHT),
+            int(LampState.DAYLIGHT_UNKNOWN),
+        ],
         default=int(LampState.DARK),
     )
     grid["source"] = np.where(from_letsgrow, LAMP_SOURCE_LETSGROW, LAMP_SOURCE_SENSORS)
