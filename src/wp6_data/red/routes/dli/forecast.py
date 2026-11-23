@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 import pandas as pd
+import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
@@ -23,11 +24,12 @@ from wp6_data.red.dli import (
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model
+from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model, lamp_on_fraction
 from wp6_data.shared import make_schedule_chart, render_page, render_stat_grid, utc_day_bounds
 from wp6_data.shared.time import display_tz
 
 router = APIRouter()
+log = structlog.get_logger()
 
 PAGE_TITLE = "SPoHF Red - DLI Forecast"
 
@@ -81,12 +83,24 @@ async def dli_forecast(
         return render_page(PAGE_TITLE, f"<h1>Error: {e}</h1>",
                           show_back_link=True, back_url="/dli")
 
+    # The pattern comes from LetsGrow where it has delivered: it switched the
+    # lamps, so its fortnight says how often each hour was lit — including the
+    # bright middays the PAR sensors cannot see a lamp in. Unreachable, it falls
+    # back to the sensors, and the note below says which was used.
+    try:
+        status_df = await dli_data.get_lamp_status_readings(lamp_window_start, lamp_window_end)
+        on_fraction = lamp_on_fraction(status_df, deps.lamp_status)
+    except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
+        log.warning("lamp_status_unavailable", error=str(e))
+        on_fraction = None
+
     lamp = None
     if not lamp_par_df.empty:
         lamp = derive_lamp_model(
             lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
             lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
             attenuation=model.attenuation_factor if model.is_trained() else None,
+            on_fraction=on_fraction,
         )
     lamp_schedule = lamp_hourly_par(lamp)
 
@@ -271,11 +285,10 @@ async def dli_forecast(
     # Say where the lamp half of "predicted" came from — a schedule change is a
     # thing no weather data would catch, so the reader is told what was assumed.
     if lamp is not None and lamp.is_lighting:
-        hours = ", ".join(f"{h:02d}:00" for h in sorted(lamp.hours_on))
         lamp_note = (
-            f"Total predicted = natural + lamps at {lamp.power_par:.0f} µmol/m²/s "
-            f"on {hours} (measured over the last {lamp.observed_days} days; "
-            "assumes that schedule continues)."
+            f"Total predicted = natural + the lamps' recent pattern, {lamp.describe()} "
+            f"(per {lamp.schedule_source}, last {lamp.observed_days} days; assumes "
+            "that pattern continues)."
         )
     elif lamp is not None:
         lamp_note = (

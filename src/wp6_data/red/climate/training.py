@@ -32,8 +32,10 @@ from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import structlog
 from starlette.concurrency import run_in_threadpool
 
+from wp6_data.red import deps
 from wp6_data.red.climate import data as climate_data
 from wp6_data.red.climate.config import ClimateModelConfig
 from wp6_data.red.climate.downscale import DownscaleStats, WireDownscaler
@@ -46,7 +48,8 @@ from wp6_data.red.climate.model import (
     write_artifact,
 )
 from wp6_data.red.db import WIRE_SENSOR_HEIGHTS
-from wp6_data.red.lamp import LampModel, derive_lamp_model
+from wp6_data.red.dli.data import get_lamp_status_readings
+from wp6_data.red.lamp import LampModel, derive_lamp_model, lamp_on_fraction
 from wp6_data.red.wires import wire_ids
 from wp6_data.shared.weather import OpenMeteoClient
 
@@ -54,6 +57,8 @@ from wp6_data.shared.weather import OpenMeteoClient
 # predicted: temperature first, because humidity's conversion back from moisture
 # content needs the predicted temperature at that height.
 WIRE_MEASUREMENTS: tuple[str, ...] = ("temp", "hum", "co2", "par")
+
+log = structlog.get_logger()
 
 
 @dataclass
@@ -232,7 +237,16 @@ async def train_chain(
     natural_par = await climate_data.sensor_series(
         config.par.natural.device, config.par.natural.sensor, start, end,
     )
-    lamp = derive_lamp_model(natural_par, canopy_par)
+    # The same lamp model /dli/forecast uses, LetsGrow included, so the two
+    # pages cannot disagree about what the lamps are doing.
+    try:
+        on_fraction = lamp_on_fraction(
+            await get_lamp_status_readings(start, end), deps.lamp_status,
+        )
+    except Exception as exc:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
+        log.warning("lamp_status_unavailable", error=str(exc))
+        on_fraction = None
+    lamp = derive_lamp_model(natural_par, canopy_par, on_fraction=on_fraction)
 
     wire_series: dict[tuple[str, str], dict[str, pd.DataFrame]] = {}
     # Every height of every installed wire is offered; one the wire never

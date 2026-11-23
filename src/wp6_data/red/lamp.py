@@ -93,10 +93,26 @@ LAMP_RATIO_CEILING = 1.0
 LAMP_SUBTRACTION_THRESHOLD = 10.0
 MIN_LAMP_READINGS = 3
 
+# Which evidence a lamp verdict came from, for anyone reading a page built on it.
+LAMP_SOURCE_LETSGROW = "LetsGrow"
+LAMP_SOURCE_SENSORS = "PAR sensors"
+
 
 @dataclass(frozen=True)
 class LampModel:
-    """What the lamps are doing, as far as the sensors can tell."""
+    """What the lamps are doing, as far as the sensors and LetsGrow can tell.
+
+    ``hourly_share`` is LetsGrow's average on-fraction per hour-of-day over the
+    recent window: 0.6 at 11:00 means the lamps ran at 11:00 on about 60% of
+    recent days — on the dull ones, since the grower switches them off on
+    sunlight. The forecast adds that *expected* lamp light rather than all or
+    nothing. Measured on a year of LetsGrow, against a fixed hour set read off
+    the PAR sensors, it cut the error in forecast lamp DLI from 2.18 to 1.29
+    mol/m²/day (autumn 2026) and from 1.59 to 1.16 (winter 2025-26).
+
+    ``None`` when LetsGrow had nothing for the window: then ``hours_on`` is the
+    PAR detector's verdict and each of those hours counts in full.
+    """
 
     attenuation: float
     attenuation_days: int
@@ -105,31 +121,60 @@ class LampModel:
     observed_days: int
     schedule_from: date | None = None
     attenuation_source: str = "measured"  # "measured" | "supplied" | "unknown"
+    hourly_share: tuple[float, ...] | None = None  # 24 values, hour-of-day 0-23
+    schedule_source: str = LAMP_SOURCE_SENSORS
+
+    def share_at(self, hour: int) -> float:
+        """Expected share of ``hour`` the lamps run, 0-1."""
+        if self.hourly_share is not None:
+            return self.hourly_share[hour]
+        return 1.0 if hour in self.hours_on else 0.0
 
     @property
     def is_lighting(self) -> bool:
-        return bool(self.hours_on) and self.power_par is not None
+        if self.power_par is None:
+            return False
+        return any(self.share_at(h) > 0 for h in range(24))
+
+    @property
+    def lamp_hours_per_day(self) -> float:
+        """Expected lamp hours in a day — what a schedule summary should quote."""
+        return sum(self.share_at(h) for h in range(24))
 
     def lamp_par_at(self, moment: datetime) -> float:
-        """Lamp PAR at ``moment``, assuming the recent schedule continues."""
+        """Expected lamp PAR at ``moment``, assuming the recent pattern continues."""
         if not self.is_lighting:
             return 0.0
-        return float(self.power_par) if moment.hour in self.hours_on else 0.0
+        return float(self.power_par) * self.share_at(moment.hour)
 
     def hourly_schedule(self) -> dict[int, float]:
-        """Lamp PAR per hour-of-day — all zeros when the lamps are not running.
+        """Expected lamp PAR per hour-of-day — all zeros when the lamps are not running.
 
         The shape ``dli.schedule`` wants: every hour present, so a caller can
         sum it into a daily lamp DLI without worrying about missing keys.
         """
         if not self.is_lighting:
             return dict.fromkeys(range(24), 0.0)
-        return {h: (float(self.power_par) if h in self.hours_on else 0.0) for h in range(24)}
+        return {h: float(self.power_par) * self.share_at(h) for h in range(24)}
 
     def canopy_par(self, natural_above_lamp: float, moment: datetime) -> float:
         """Canopy PAR from a predicted above-lamp natural value."""
         natural = max(0.0, natural_above_lamp) * self.attenuation
         return natural + self.lamp_par_at(moment)
+
+    def describe(self) -> str:
+        """One line on the lamps' recent pattern, for the pages that rely on it."""
+        if not self.is_lighting:
+            return "off"
+        if self.hourly_share is None:
+            hours = sorted(self.hours_on)
+            listed = ", ".join(f"{h:02d}:00" for h in hours) if len(hours) <= 6 \
+                else f"{len(hours)} hours a day"
+            return f"{self.power_par:g} µmol/m²/s on {listed}"
+        return (
+            f"{self.power_par:g} µmol/m²/s for an expected "
+            f"{self.lamp_hours_per_day:.1f} h a day"
+        )
 
 
 def derive_lamp_model(
@@ -138,6 +183,7 @@ def derive_lamp_model(
     *,
     recent_days: int = RECENT_DAYS,
     attenuation: float | None = None,
+    on_fraction: pd.Series | None = None,
 ) -> LampModel:
     """Read the lamps off the two PAR sensors.
 
@@ -183,6 +229,14 @@ def derive_lamp_model(
         return LampModel(attenuation, attenuation_days, None, frozenset(), 0,
                          attenuation_source=attenuation_source)
 
+    if on_fraction is not None and not on_fraction.empty:
+        from_letsgrow = _from_letsgrow(
+            above_lamp_df, canopy_df, on_fraction, recent_days,
+            attenuation, attenuation_days, attenuation_source,
+        )
+        if from_letsgrow is not None:
+            return from_letsgrow
+
     hours_on, power_par = _schedule_over(recent)
     if power_par is None:
         return LampModel(
@@ -201,6 +255,85 @@ def derive_lamp_model(
         schedule_from=recent.index.max().date(),
         attenuation_source=attenuation_source,
     )
+
+
+def _from_letsgrow(
+    above_lamp_df: pd.DataFrame,
+    canopy_df: pd.DataFrame,
+    on_fraction: pd.Series,
+    recent_days: int,
+    attenuation: float,
+    attenuation_days: int,
+    attenuation_source: str,
+) -> LampModel | None:
+    """The lamp model from LetsGrow's last ``recent_days``, or ``None`` if it cannot say.
+
+    The window ends at LetsGrow's last delivery, not at "now": it runs about
+    two days late, and the days it has not delivered are unknown, not dark.
+    The level is the trailing one at that date. ``None`` (so the caller falls
+    back to the sensors) when there is no dark, fully-lit hour to set a level
+    from — LetsGrow saying "on" does not tell how much light reaches the sensor.
+    """
+    last = on_fraction.index.max()
+    recent = on_fraction[on_fraction.index > last - pd.Timedelta(days=recent_days)]
+    days = int(recent.index.normalize().nunique())
+
+    share = recent.groupby(recent.index.hour).mean().reindex(range(24), fill_value=0.0)
+    if not (share > 0).any():
+        return LampModel(
+            attenuation, attenuation_days, None, frozenset(), days,
+            schedule_from=last.date(), attenuation_source=attenuation_source,
+            hourly_share=tuple(0.0 for _ in range(24)),
+            schedule_source=LAMP_SOURCE_LETSGROW,
+        )
+
+    level = lamp_level_by_date(above_lamp_df, canopy_df, on_fraction).dropna()
+    level = level[[d <= last.date() for d in level.index]]
+    power_par = float(level.iloc[-1]) if not level.empty else None
+    if power_par is None and attenuation_source != "unknown":
+        power_par = _daylight_level(above_lamp_df, canopy_df, recent, attenuation)
+    if power_par is None:
+        return None
+
+    return LampModel(
+        attenuation=attenuation,
+        attenuation_days=attenuation_days,
+        power_par=round(power_par, 1),
+        hours_on=frozenset(int(h) for h, v in share.items() if v >= LIT_HOUR_SHARE),
+        observed_days=days,
+        schedule_from=last.date(),
+        attenuation_source=attenuation_source,
+        hourly_share=tuple(round(float(v), 3) for v in share),
+        schedule_source=LAMP_SOURCE_LETSGROW,
+    )
+
+
+def _daylight_level(
+    above_lamp_df: pd.DataFrame,
+    canopy_df: pd.DataFrame,
+    on_fraction: pd.Series,
+    attenuation: float,
+) -> float | None:
+    """The lamp level from sunlit hours LetsGrow says were fully lit.
+
+    Only for when the window has no dark lit hour — the edges of the lamp season,
+    when the lamps run in daylight alone (March, April and September 2026 each
+    had days of 1-8 mol/m²/day of lamp light this way). The canopy minus the
+    natural light that reached it is the lamp; it needs ``attenuation`` and
+    inherits its error, so the dark-hour level is always preferred. Over winter
+    2025-26 the two agreed within 5-15%.
+    """
+    joined = pd.concat(
+        [_hourly(above_lamp_df).rename("above"), _hourly(canopy_df).rename("canopy"),
+         on_fraction.rename("on")],
+        axis=1,
+    ).dropna()
+    lit = joined[(joined["above"] >= DAYLIGHT_THRESHOLD) & (joined["on"] >= LAMP_FULL_ON)]
+    if lit.empty:
+        return None
+    implied = (lit["canopy"] - lit["above"] * attenuation) / lit["on"]
+    level = float(implied.median())
+    return level if level > 0 else None
 
 
 def _min_indoor_par() -> float:
@@ -631,10 +764,6 @@ def compute_attenuation(
 
 # The calendar's verdict for one hour: lit when the lamps ran most of it.
 LIT_HOUR_SHARE = 0.5
-
-# Which evidence an hour's lamp state came from, for anyone reading the calendar.
-LAMP_SOURCE_LETSGROW = "LetsGrow"
-LAMP_SOURCE_SENSORS = "PAR sensors"
 
 # An hour counts as fully lit when the lamps ran at least this share of it, at
 # full output. Only such hours set the level, so a lamp switching on mid-hour

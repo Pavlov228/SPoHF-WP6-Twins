@@ -71,8 +71,8 @@ def _overview(chain: TrainedChain, stats: ClimateModelStats) -> str:
         lamp_row = "not derived"
     elif lamp.is_lighting:
         lamp_row = (
-            f"{lamp.power_par:g} µmol/m²/s over {len(lamp.hours_on)} h/day, "
-            f"observed across the last {lamp.observed_days} days"
+            f"{lamp.describe()}, observed across the last {lamp.observed_days} "
+            f"days ({lamp.schedule_source})"
         )
     else:
         lamp_row = f"not running in the last {lamp.observed_days} days"

@@ -166,6 +166,7 @@ async def dli_lamps(
     lamp = derive_lamp_model(
         above_df, canopy_df,
         attenuation=model.attenuation_factor if model.is_trained() else None,
+        on_fraction=on_fraction,
     )
 
     if grid.empty:
@@ -189,9 +190,8 @@ async def dli_lamps(
     lamp_hours_per_lit_day = (len(lit) / lit_days) if lit_days else 0.0
 
     if lamp.is_lighting:
-        schedule = ", ".join(f"{h:02d}" for h in sorted(lamp.hours_on))
-        current = f"{schedule}h"
-        current_sub = f"at {lamp.power_par:.0f} µmol/m²/s"
+        current = f"{lamp.lamp_hours_per_day:.1f} h/day"
+        current_sub = f"at {lamp.power_par:.0f} µmol/m²/s, per {lamp.schedule_source}"
     else:
         current = "Off"
         current_sub = f"last {min(RECENT_DAYS, observed_days)} days"
@@ -232,8 +232,9 @@ async def dli_lamps(
             after its last delivery fall back to the PAR sensors (canopy above
             {LAMP_THRESHOLD:.0f} µmol/m²/s with no sun, or brighter than the roof
             sensor in daylight). Hover a cell to see which applied.<br/>
-            <strong>Forecast schedule</strong> is what /dli/forecast still assumes for
-            the days ahead: the hours lit on most of the last {RECENT_DAYS} days.
+            <strong>Forecast schedule</strong> is what /dli/forecast assumes for the
+            days ahead: each hour's share of the last {RECENT_DAYS} days the lamps ran,
+            summed — the lamps' expected hours a day.
             Gaps are hours with no usable PAR reading, not hours that were dark.
         </small>
     """

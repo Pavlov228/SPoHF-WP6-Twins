@@ -339,13 +339,10 @@ def _known_caveats(
             "The lamps were not seen running recently, so nothing is added for "
             "them — if they are switched on, this will read low."
         ]
-    hours = ", ".join(
-        f"{hour:02d}:00" for hour in sorted(lamp.hours_on)
-    ) if len(lamp.hours_on) <= 6 else f"{len(lamp.hours_on)} hours a day"
     return [
         f"PAR is natural light predicted from weather, scaled to canopy level, "
-        f"plus an observed lamp contribution of {lamp.power_par:g} µmol/m²/s "
-        f"during {hours}. That schedule is carried forward from the last "
+        f"plus the lamps' recent pattern: {lamp.describe()}, per "
+        f"{lamp.schedule_source}. That pattern is carried forward from the last "
         f"{lamp.observed_days} days — a change to the lamp plan is not "
         f"something weather can predict."
     ]

@@ -16,6 +16,8 @@ from wp6_data.red.dli.constants import SECONDS_PER_HOUR, UMOL_TO_MOL
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
     LAMP_FULL_ON,
+    LAMP_SOURCE_LETSGROW,
+    LAMP_SOURCE_SENSORS,
     LAMP_THRESHOLD,
     RECENT_DAYS,
     LampModel,
@@ -516,3 +518,72 @@ class TestLampStatusConfig:
 
         with pytest.raises(ValueError, match="lamps"):
             load_lamp_status(path)
+
+
+class TestForecastFromLetsGrow:
+    """The forecast's lamp pattern: each hour's share of recent days it was lit."""
+
+    def _lit_every_other_midday(self, days=RECENT_DAYS):
+        """Lamps at night every day, at 12:00 only on alternate (dull) days."""
+        natural, canopy, status = _greenhouse(days, 180.0, (23, 0, 1, 2))
+        times = pd.to_datetime(status["time"], utc=True)
+        midday = (times.dt.hour == 12) & (times.dt.day % 2 == 0)
+        on = (status["sensor"] == _CONFIG.switch) & midday
+        status.loc[on, "value"] = 1.0
+        return natural, canopy, status
+
+    def test_an_hour_lit_on_half_the_days_adds_half_the_lamp(self):
+        natural, canopy, status = self._lit_every_other_midday()
+
+        lamp = derive_lamp_model(
+            natural, canopy, on_fraction=lamp_on_fraction(status, _CONFIG),
+        )
+
+        assert lamp.share_at(12) == pytest.approx(0.5, abs=0.1)
+        assert lamp.lamp_par_at(datetime(2026, 1, 1, 12, tzinfo=UTC)) == pytest.approx(
+            180.0 * lamp.share_at(12)
+        )
+        assert lamp.share_at(0) == pytest.approx(1.0)
+        assert lamp.schedule_source == LAMP_SOURCE_LETSGROW
+
+    def test_the_daily_lamp_light_is_the_expected_hours_times_the_level(self):
+        natural, canopy, status = self._lit_every_other_midday()
+
+        lamp = derive_lamp_model(
+            natural, canopy, on_fraction=lamp_on_fraction(status, _CONFIG),
+        )
+
+        assert sum(lamp.hourly_schedule().values()) == pytest.approx(
+            lamp.power_par * lamp.lamp_hours_per_day
+        )
+
+    def test_letsgrow_off_for_the_whole_window_means_no_lamps(self):
+        natural, canopy, _ = _greenhouse(RECENT_DAYS, 180.0, (23, 0, 1, 2))
+        index = pd.date_range("2025-12-01", periods=RECENT_DAYS * 24, freq="h", tz="UTC")
+
+        lamp = derive_lamp_model(
+            natural, canopy, on_fraction=lamp_on_fraction(_status(index, 0, 100), _CONFIG),
+        )
+
+        assert not lamp.is_lighting
+
+    def test_without_letsgrow_the_sensor_schedule_still_works(self):
+        natural, canopy, _ = _greenhouse(RECENT_DAYS, 180.0, (23, 0, 1, 2))
+
+        lamp = derive_lamp_model(natural, canopy, on_fraction=pd.Series(dtype=float))
+
+        assert lamp.schedule_source == LAMP_SOURCE_SENSORS
+        assert lamp.hours_on == frozenset({23, 0, 1, 2})
+
+    def test_lamps_only_in_daylight_still_get_a_level(self):
+        """Season edges: no dark lit hour, so the level comes from sunlit ones."""
+        natural, canopy, status = _greenhouse(RECENT_DAYS, 180.0, (10, 11))
+
+        lamp = derive_lamp_model(
+            natural, canopy, attenuation=_ATTENUATION,
+            on_fraction=lamp_on_fraction(status, _CONFIG),
+        )
+
+        assert lamp.schedule_source == LAMP_SOURCE_LETSGROW
+        assert lamp.power_par == pytest.approx(180.0, abs=1.0)
+        assert lamp.share_at(10) == pytest.approx(1.0)
