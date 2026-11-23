@@ -35,9 +35,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import IntEnum
+from pathlib import Path
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import yaml
+from pydantic import BaseModel
 
 from wp6_data.shared.aggregation import resample_hourly
 
@@ -229,6 +232,7 @@ class LampState(IntEnum):
 def lamp_state_grid(
     above_lamp_df: pd.DataFrame,
     canopy_df: pd.DataFrame,
+    on_fraction: pd.Series | None = None,
 ) -> pd.DataFrame:
     """One row per observed hour: which state it was in, and the readings behind it.
 
@@ -249,38 +253,50 @@ def lamp_state_grid(
     The same gate the model's training uses, and it separates cleanly: the
     dimmest real December day still reads 25x it.
 
-    Returns ``date, hour, state, above_par, canopy_par``.
+    With ``on_fraction`` (LetsGrow, see :func:`lamp_on_fraction`), every hour
+    LetsGrow reported takes its on/off from the switch itself, and only the
+    daylight/dark split comes from the roof sensor. Hours after its last
+    delivery, or with no LetsGrow at all, keep the sensor reading. ``source``
+    says which applied, per hour.
+
+    Returns ``date, hour, state, above_par, canopy_par, source``.
     """
+    columns = ["date", "hour", "state", "above_par", "canopy_par", "source"]
     if above_lamp_df.empty or canopy_df.empty:
-        return pd.DataFrame(columns=["date", "hour", "state", "above_par", "canopy_par"])
+        return pd.DataFrame(columns=columns)
 
     above = _hourly(above_lamp_df)
     canopy = _hourly(canopy_df)
     joined = pd.concat([above.rename("above_par"), canopy.rename("canopy_par")], axis=1).dropna()
     if joined.empty:
-        return pd.DataFrame(columns=["date", "hour", "state", "above_par", "canopy_par"])
+        return pd.DataFrame(columns=columns)
 
     # Drop days the above-lamp sensor was not really measuring (see docstring).
     measuring = joined.groupby(joined.index.date)["above_par"].transform("sum")
     joined = joined[measuring > _min_indoor_par()]
     if joined.empty:
-        return pd.DataFrame(columns=["date", "hour", "state", "above_par", "canopy_par"])
+        return pd.DataFrame(columns=columns)
 
-    is_daylight = joined["above_par"] >= DAYLIGHT_THRESHOLD
-    is_lit = ~is_daylight & (joined["canopy_par"] > LAMP_THRESHOLD)
+    is_daylight = (joined["above_par"] >= DAYLIGHT_THRESHOLD).to_numpy()
+    detected = _lit_mask(
+        joined.rename(columns={"above_par": "above", "canopy_par": "canopy"})
+    )
+    lamps_on, from_letsgrow = detected, np.zeros(len(joined), dtype=bool)
+    if on_fraction is not None and not on_fraction.empty:
+        reported = on_fraction.reindex(joined.index)
+        from_letsgrow = reported.notna().to_numpy()
+        lamps_on = np.where(from_letsgrow, reported.fillna(0.0) >= LIT_HOUR_SHARE, detected)
 
     grid = joined.reset_index()
     grid["date"] = grid["time"].dt.date
     grid["hour"] = grid["time"].dt.hour
-    daylight_lit = _lit_mask(
-        joined.rename(columns={"above_par": "above", "canopy_par": "canopy"})
-    ) & is_daylight.to_numpy()
     grid["state"] = np.select(
-        [is_lit.to_numpy(), daylight_lit, is_daylight.to_numpy()],
+        [lamps_on & ~is_daylight, lamps_on & is_daylight, is_daylight],
         [int(LampState.LIT), int(LampState.DAYLIGHT_LIT), int(LampState.DAYLIGHT)],
         default=int(LampState.DARK),
     )
-    return grid[["date", "hour", "state", "above_par", "canopy_par"]]
+    grid["source"] = np.where(from_letsgrow, LAMP_SOURCE_LETSGROW, LAMP_SOURCE_SENSORS)
+    return grid[columns]
 
 
 def _lit_mask(joined: pd.DataFrame) -> np.ndarray:
@@ -597,3 +613,162 @@ def compute_attenuation(
         return 1.0, 0
 
     return ratio, len(daily)
+
+
+# ── Lamp state from LetsGrow ─────────────────────────────────────────────────
+#
+# LetsGrow is the climate computer that *switches* the lamps, so its record of
+# whether they were on is the actuator itself, not a reading of its effect. It
+# agrees with the PAR detector above on 93% of a year's hours, and where they
+# disagree it is almost always LetsGrow seeing a lit hour the detector missed
+# (463 against 86): bright daylight hides the lamp from a ratio test, it does not
+# hide it from the switch.
+#
+# LetsGrow does not report *how much light* reaches the canopy sensor — that
+# depends on where the sensor hangs. So the level is still measured from PAR,
+# on dark hours LetsGrow says were fully on, and LetsGrow supplies only when and
+# at what share the installation ran.
+
+# The calendar's verdict for one hour: lit when the lamps ran most of it.
+LIT_HOUR_SHARE = 0.5
+
+# Which evidence an hour's lamp state came from, for anyone reading the calendar.
+LAMP_SOURCE_LETSGROW = "LetsGrow"
+LAMP_SOURCE_SENSORS = "PAR sensors"
+
+# An hour counts as fully lit when the lamps ran at least this share of it, at
+# full output. Only such hours set the level, so a lamp switching on mid-hour
+# cannot drag it down.
+LAMP_FULL_ON = 0.95
+
+
+class LampStatusConfig(BaseModel):
+    """Where LetsGrow reports the lamp actuator, from ``metadata.yaml``'s ``lamps``."""
+
+    device: str
+    # sensor tag: 1 while the lamps are switched on, else 0. Not `on`, which
+    # YAML reads as the boolean true.
+    switch: str
+    share: str  # sensor tag: % of the installation running
+
+
+def load_lamp_status(yaml_path: Path) -> LampStatusConfig:
+    """The ``lamps`` block of red's metadata. Raises when it is absent.
+
+    No default: a guessed device would read as "the lamps never ran", which the
+    pages would then report as a fact about the greenhouse.
+    """
+    raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    if "lamps" not in raw:
+        raise ValueError(f"no 'lamps' block in {yaml_path}")
+    return LampStatusConfig(**raw["lamps"])
+
+
+def lamp_on_fraction(status_df: pd.DataFrame, config: LampStatusConfig) -> pd.Series:
+    """Share of each hour the lamps ran, scaled by the share of the installation on.
+
+    ``status_df`` is a ``device, sensor, time, value`` frame of the two LetsGrow
+    tags. 1.0 is a whole hour at full output; 0.5 is half an hour, or a whole
+    hour at half the installation. Hours LetsGrow did not report are **absent**,
+    never zero: "not delivered yet" is not "off".
+    """
+    if status_df.empty:
+        return pd.Series(dtype=float)
+    frame = status_df[status_df["device"] == config.device]
+    wide = frame.pivot_table(index="time", columns="sensor", values="value", aggfunc="mean")
+    if config.switch not in wide.columns or config.share not in wide.columns:
+        return pd.Series(dtype=float)
+    wide = wide[[config.switch, config.share]].dropna()
+    running = (wide[config.switch] >= 0.5).astype(float) * wide[config.share].clip(0, 100) / 100
+    running.index = pd.to_datetime(running.index, utc=True)
+    return running.resample("1h").mean().dropna()
+
+
+def lamp_level_by_date(
+    above_lamp_df: pd.DataFrame,
+    canopy_df: pd.DataFrame,
+    on_fraction: pd.Series,
+    *,
+    window_days: int = RECENT_DAYS,
+    centred: bool = False,
+) -> pd.Series:
+    """Canopy PAR from the lamps at full output, per date, over a rolling window.
+
+    Measured on dark hours LetsGrow says were fully lit, so nothing about
+    attenuation or daylight enters it. Trailing rather than one number because
+    the level is a fact about where the canopy sensor hangs, and that changes:
+    188 µmol/m²/s through winter 2025-26 and 140 from September 2026, with the
+    lamps at 100% both times. A window that spans such a step reports each side
+    at its own level.
+
+    ``centred`` looks both ways, for a day that has already happened: a trailing
+    window lags a change by up to ``window_days``, and in February 2026 that put
+    the level 15-20 µmol above the nights it was describing. A forecast has no
+    future to look at, so the default stays trailing.
+
+    Indexed by ``date``; dates before the first measurement take the first one,
+    so a window that starts mid-gap still has a level.
+    """
+    joined = pd.concat(
+        [_hourly(above_lamp_df).rename("above"), _hourly(canopy_df).rename("canopy"),
+         on_fraction.rename("on")],
+        axis=1,
+    ).dropna()
+    if joined.empty:
+        return pd.Series(dtype=float)
+    full = joined[(joined["above"] < DAYLIGHT_THRESHOLD) & (joined["on"] >= LAMP_FULL_ON)]
+    if full.empty:
+        return pd.Series(dtype=float)
+
+    per_hour = full["canopy"] / full["on"]
+    daily = per_hour.groupby(per_hour.index.normalize()).median()
+    rolled = daily.rolling(f"{window_days}D", center=centred).median()
+
+    hours = pd.concat([_hourly(above_lamp_df), _hourly(canopy_df)]).index
+    days = pd.date_range(hours.min().normalize(), hours.max().normalize(), freq="D")
+    rolled = rolled.reindex(days.union(rolled.index)).ffill().bfill().reindex(days)
+    rolled.index = rolled.index.date
+    return rolled
+
+
+def observed_lamp_par(
+    above_lamp_df: pd.DataFrame,
+    canopy_df: pd.DataFrame,
+    on_fraction: pd.Series,
+) -> tuple[pd.Series, pd.Timestamp | None]:
+    """Lamp PAR at the canopy for every observed hour: what the lamps actually added.
+
+    For a day that has happened there is nothing to forecast about the lamps —
+    LetsGrow says when they ran. Each hour is ``level × on-fraction``.
+
+    LetsGrow arrives about two days late (see ``letsgrow.FRESHNESS_BUDGET_HOURS``),
+    so hours after its last delivery fall back to the PAR detector, which reads
+    the same two sensors live. Without any LetsGrow at all the whole span falls
+    back, level included.
+
+    Returns ``(lamp PAR per hour, last hour LetsGrow covered)``; the timestamp is
+    ``None`` when LetsGrow contributed nothing, so a page can say which source
+    each part came from.
+    """
+    above, canopy = _hourly(above_lamp_df), _hourly(canopy_df)
+    joined = pd.concat([above.rename("above"), canopy.rename("canopy")], axis=1).dropna()
+    if joined.empty:
+        return pd.Series(dtype=float), None
+
+    level = lamp_level_by_date(above_lamp_df, canopy_df, on_fraction, centred=True)
+    covered_until = on_fraction.index.max() if not on_fraction.empty else None
+
+    detected = pd.Series(_lit_mask(joined).astype(float), index=joined.index)
+    if level.empty:
+        _, power_par = _schedule_over(joined)
+        return detected * (power_par or 0.0), None
+
+    running = on_fraction.reindex(joined.index)
+    if covered_until is not None:
+        running = running.where(joined.index <= covered_until, detected)
+    running = running.fillna(detected)
+
+    hourly_level = pd.Series(
+        [level.get(ts.date()) for ts in joined.index], index=joined.index, dtype=float,
+    )
+    return (running * hourly_level).fillna(0.0), covered_until

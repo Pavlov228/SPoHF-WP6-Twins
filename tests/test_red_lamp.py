@@ -15,12 +15,19 @@ import pytest
 from wp6_data.red.dli.constants import SECONDS_PER_HOUR, UMOL_TO_MOL
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
+    LAMP_FULL_ON,
     LAMP_THRESHOLD,
+    RECENT_DAYS,
     LampModel,
     LampState,
+    LampStatusConfig,
     compute_attenuation,
     derive_lamp_model,
+    lamp_level_by_date,
+    lamp_on_fraction,
     lamp_state_grid,
+    load_lamp_status,
+    observed_lamp_par,
 )
 
 
@@ -339,3 +346,173 @@ class TestLampStateGridOverlap:
 
         assert LampState.DAYLIGHT_LIT not in states
         assert LampState.LIT not in states
+
+
+# ── Lamp state from LetsGrow ─────────────────────────────────────────────────
+
+_CONFIG = LampStatusConfig(device="lg-lights", switch="on_tag", share="pct_tag")
+_ATTENUATION = 0.62
+
+
+def _status(index, switch, share):
+    """LetsGrow's two lamp tags at ``index``, in the ``fetch_data_tsdb`` shape."""
+    switch = np.broadcast_to(np.asarray(switch, dtype=float), len(index))
+    share = np.broadcast_to(np.asarray(share, dtype=float), len(index))
+    return pd.concat([
+        pd.DataFrame({"device": _CONFIG.device, "sensor": _CONFIG.switch,
+                      "time": index, "value": switch}),
+        pd.DataFrame({"device": _CONFIG.device, "sensor": _CONFIG.share,
+                      "time": index, "value": share}),
+    ])
+
+
+def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01"):
+    """Roof and canopy PAR plus LetsGrow, for lamps on at ``lit_hours`` every day.
+
+    The daylight peak is bright enough that a lamp at ``lamp_level`` cannot lift
+    the canopy above the roof — the case the PAR ratio test cannot see.
+    """
+    index = pd.date_range(start, periods=days * 24, freq="h", tz="UTC")
+    hour = index.hour.to_numpy()
+    natural = np.clip(1200 * np.sin(np.pi * (hour - 8) / 8), 0, None)
+    lit = np.isin(hour, list(lit_hours))
+    level = np.broadcast_to(np.asarray(lamp_level, dtype=float), len(index))
+    canopy = natural * _ATTENUATION + np.where(lit, level, 0.0)
+    status = _status(index, lit.astype(float), 100.0)
+    return _series(index, natural), _series(index, canopy), status
+
+
+class TestLampOnFraction:
+    def test_a_whole_hour_at_full_share_is_one(self):
+        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
+
+        fraction = lamp_on_fraction(_status(index, 1, 100), _CONFIG)
+
+        assert fraction.iloc[0] == pytest.approx(1.0)
+
+    def test_half_the_installation_is_half(self):
+        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
+
+        fraction = lamp_on_fraction(_status(index, 1, 50), _CONFIG)
+
+        assert fraction.iloc[0] == pytest.approx(0.5)
+
+    def test_switched_off_is_zero_whatever_the_share_says(self):
+        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
+
+        fraction = lamp_on_fraction(_status(index, 0, 100), _CONFIG)
+
+        assert fraction.iloc[0] == 0.0
+
+    def test_an_hour_letsgrow_did_not_report_is_absent_not_off(self):
+        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
+        later = pd.date_range("2026-01-01 03:00", periods=12, freq="5min", tz="UTC")
+        status = pd.concat([_status(index, 1, 100), _status(later, 1, 100)])
+
+        fraction = lamp_on_fraction(status, _CONFIG)
+
+        assert pd.Timestamp("2026-01-01 01:00", tz="UTC") not in fraction.index
+
+    def test_no_letsgrow_rows_give_an_empty_series(self):
+        empty = pd.DataFrame(columns=["device", "sensor", "time", "value"])
+
+        assert lamp_on_fraction(empty, _CONFIG).empty
+
+
+class TestLampLevel:
+    def test_the_level_is_read_on_dark_hours_letsgrow_says_were_lit(self):
+        natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, 2))
+
+        level = lamp_level_by_date(natural, canopy, lamp_on_fraction(status, _CONFIG))
+
+        assert level.dropna().to_numpy() == pytest.approx(180.0)
+
+    def test_the_level_follows_a_moved_sensor(self):
+        """Same lamps at 100%, the sensor now under fewer of them: 188 -> 140."""
+        days = 3 * RECENT_DAYS
+        index_days = pd.date_range("2026-01-01", periods=days, freq="D")
+        per_day = np.where(np.arange(days) < days // 2, 188.0, 140.0)
+        natural, canopy, status = _greenhouse(
+            days, np.repeat(per_day, 24), (23, 0, 1, 2), start="2026-01-01",
+        )
+
+        level = lamp_level_by_date(natural, canopy, lamp_on_fraction(status, _CONFIG))
+
+        assert level[index_days[0].date()] == pytest.approx(188.0)
+        assert level[index_days[-1].date()] == pytest.approx(140.0)
+
+    def test_a_part_lit_hour_does_not_set_the_level(self):
+        index = pd.date_range("2026-01-01", periods=48, freq="h", tz="UTC")
+        dark = np.zeros(len(index))
+        canopy = np.full(len(index), 90.0)
+        half = _status(index, 1, 100 * (LAMP_FULL_ON - 0.1))
+
+        level = lamp_level_by_date(
+            _series(index, dark), _series(index, canopy), lamp_on_fraction(half, _CONFIG),
+        )
+
+        assert level.empty
+
+
+class TestObservedLampPar:
+    def test_a_bright_lit_hour_gets_its_lamp_although_the_ratio_test_misses_it(self):
+        noon = 12
+        natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, noon))
+
+        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+
+        at_noon = lamp[lamp.index.hour == noon]
+        assert at_noon.to_numpy() == pytest.approx(180.0)
+
+    def test_hours_letsgrow_says_were_off_add_nothing(self):
+        natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1))
+
+        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+
+        assert (lamp[lamp.index.hour.isin([3, 12, 20])] == 0.0).all()
+
+    def test_a_day_with_the_lamps_on_adds_its_whole_lamp_dli(self):
+        lit_hours = (23, 0, 1, 2, 12)
+        natural, canopy, status = _greenhouse(10, 180.0, lit_hours)
+
+        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+
+        one_day = lamp[lamp.index.date == date(2025, 12, 5)].sum()
+        expected = 180.0 * len(lit_hours) * SECONDS_PER_HOUR / UMOL_TO_MOL
+        assert one_day * SECONDS_PER_HOUR / UMOL_TO_MOL == pytest.approx(expected)
+
+    def test_hours_after_the_last_delivery_fall_back_to_the_detector(self):
+        natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, 2))
+        delivered_until = pd.Timestamp("2025-12-08", tz="UTC")
+        late = status[status["time"] < delivered_until]
+
+        lamp, covered = observed_lamp_par(natural, canopy, lamp_on_fraction(late, _CONFIG))
+
+        assert covered < delivered_until
+        after = lamp[(lamp.index >= delivered_until) & (lamp.index.hour == 0)]
+        assert not after.empty
+        assert after.to_numpy() == pytest.approx(180.0)
+
+    def test_without_letsgrow_the_whole_span_is_read_off_the_sensors(self):
+        natural, canopy, _ = _greenhouse(10, 180.0, (23, 0, 1, 2))
+
+        lamp, covered = observed_lamp_par(natural, canopy, pd.Series(dtype=float))
+
+        assert covered is None
+        assert lamp[lamp.index.hour == 0].to_numpy() == pytest.approx(180.0)
+
+
+class TestLampStatusConfig:
+    def test_red_declares_where_letsgrow_reports_the_lamps(self):
+        from wp6_data.red import deps
+
+        config = load_lamp_status(deps._METADATA_PATH)
+
+        assert config.device.startswith("letsgrow-")
+
+    def test_a_metadata_file_without_the_block_is_refused(self, tmp_path):
+        path = tmp_path / "metadata.yaml"
+        path.write_text("devices: {}\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="lamps"):
+            load_lamp_status(path)

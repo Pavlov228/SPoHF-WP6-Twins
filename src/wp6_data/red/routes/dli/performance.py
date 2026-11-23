@@ -10,7 +10,9 @@ from datetime import date, timedelta
 from typing import Annotated
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
+import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
@@ -23,14 +25,14 @@ from wp6_data.red.dli import (
     PERFORMANCE_ERROR_WARN_THRESHOLD_PCT,
     TOTAL_LIGHT_SENSOR,
     calculate_daily_dli,
-    compute_daily_predicted_dli,
+    daily_lamp_dli,
     fetch_weather_for_range,
     get_model,
     par_sum_to_dli,
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model
+from wp6_data.red.lamp import RECENT_DAYS, lamp_on_fraction, observed_lamp_par
 from wp6_data.shared import (
     pill_row,
     render_date_filter,
@@ -40,6 +42,7 @@ from wp6_data.shared import (
 )
 
 router = APIRouter()
+log = structlog.get_logger()
 
 PAGE_TITLE = "SPoHF Red - DLI Performance"
 
@@ -87,6 +90,31 @@ def _runs(days: list[date]) -> list[tuple[date, date]]:
         else:
             spans.append((day, day))
     return spans
+
+
+def _lamp_note(covered_until, end: date, unavailable: bool) -> str:
+    """Where the lamp half of "predicted" came from, so a reader can weigh it."""
+    if unavailable:
+        return (
+            "<p class=\"note\">Lamps: LetsGrow unreachable, so their hours are read "
+            "off the two PAR sensors for the whole window.</p>"
+        )
+    if covered_until is None:
+        return (
+            "<p class=\"note\">Lamps: no LetsGrow lamp data for this window, so "
+            "their hours are read off the two PAR sensors.</p>"
+        )
+    last = covered_until.date()
+    tail = (
+        f" After {last:%d %b} (LetsGrow arrives about two days late) they are read "
+        "off the two PAR sensors."
+        if last < end else ""
+    )
+    return (
+        "<p class=\"note\">Predicted total = predicted natural light + the lamps "
+        f"<strong>as they actually ran</strong>, per LetsGrow.{tail} So this scores "
+        "the natural-light model; the lamp schedule is not being forecast here.</p>"
+    )
 
 
 def _page(body: str) -> str:
@@ -148,28 +176,41 @@ async def dli_performance(
     except Exception as e:
         return _page(header + f"<h1>Error: {e}</h1>")
 
-    # Only the total comparison adds the lamps. The schedule is read from the
-    # fortnight *before* the scored window, so this hindcasts with only what was
-    # knowable on day one — the same "recent schedule continues" assumption the
-    # forecast page makes. Attenuation is not read from that fortnight; see
-    # derive_lamp_model on why a short winter window cannot identify it.
-    lamp = None
+    # Only the total comparison adds the lamps, and for days that have happened
+    # it adds them as they actually ran: LetsGrow switched them, so it says when
+    # and at what share, and the level comes from the PAR sensors around each
+    # day. Earlier this read one schedule from the fortnight *before* the window
+    # and applied it to all of it, which in autumn left the lamps' growing share
+    # of the day out — a steady ~3 mol/m²/day short over Oct-Nov 2026.
+    #
+    # The window starts a fortnight early so the first days have a level.
+    lamp_dli: dict[date, float] = {}
+    lamp_note = ""
     if is_total:
         lamp_window_start, _ = utc_day_bounds(start - timedelta(days=RECENT_DAYS))
-        _, lamp_window_end = utc_day_bounds(start - timedelta(days=1))
         try:
             lamp_par_df = await dli_data.get_par_readings(
                 device_ids=[NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR],
-                start=lamp_window_start, end=lamp_window_end,
+                start=lamp_window_start, end=end_dt,
             )
         except Exception as e:
             return _page(header + f"<h1>Error: {e}</h1>")
-        if not lamp_par_df.empty:
-            lamp = derive_lamp_model(
-                lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
-                lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
-                attenuation=model.attenuation_factor,
-            )
+        try:
+            status_df = await dli_data.get_lamp_status_readings(lamp_window_start, end_dt)
+        except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR detector
+            log.warning("lamp_status_unavailable", error=str(e))
+            status_df = None
+        on_fraction = (
+            lamp_on_fraction(status_df, deps.lamp_status)
+            if status_df is not None else None
+        )
+        lamp_par, covered_until = observed_lamp_par(
+            lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
+            lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
+            on_fraction if on_fraction is not None else pd.Series(dtype=float),
+        )
+        lamp_dli = daily_lamp_dli(lamp_par)
+        lamp_note = _lamp_note(covered_until, end, status_df is None)
 
     client = deps.get_weather_client()
     try:
@@ -195,10 +236,9 @@ async def dli_performance(
                 continue
             actual_dli[d] = row["dli"]
 
-    range_forecasts = [f for f in forecasts if start <= f.date <= end]
     predicted_natural_range = {d: v for d, v in predicted_natural.items() if start <= d <= end}
     predicted_dli = (
-        compute_daily_predicted_dli(range_forecasts, predicted_natural_range, lamp)
+        {d: v + lamp_dli.get(d, 0.0) for d, v in predicted_natural_range.items()}
         if is_total
         else predicted_natural_range
     )
@@ -351,6 +391,7 @@ async def dli_performance(
     content = f"""
         {header}
         <p>Comparing model predictions with <code>{sensor}</code>.</p>
+        {lamp_note}
         {stats}
         <div class="chart-section">{chart_cmp}</div>
         <div class="chart-section">{chart_err}</div>
@@ -367,4 +408,5 @@ EXTRA_CSS = """
     td, th { text-align: center; }
     .error-high { color: #ef4444 !important; font-weight: bold; }
     .no-data { color: #94a3b8 !important; font-style: italic; }
+    .note { color: #64748b; font-size: 0.9em; }
 """

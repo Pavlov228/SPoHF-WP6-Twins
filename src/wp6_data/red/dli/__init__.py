@@ -45,6 +45,7 @@ from wp6_data.red.dli.model import (
 )
 from wp6_data.red.dli.schedule import (
     compute_daily_predicted_dli,
+    daily_lamp_dli,
     distribute_dli_across_hours,
     estimate_remaining_dli,
     fetch_weather_for_range,
@@ -90,6 +91,7 @@ __all__ = [
     "encode_day_of_year",
     # Schedule functions
     "compute_daily_predicted_dli",
+    "daily_lamp_dli",
     "distribute_dli_across_hours",
     "estimate_remaining_dli",
     "fetch_weather_for_range",

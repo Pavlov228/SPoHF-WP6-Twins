@@ -6,7 +6,10 @@ import pandas as pd
 
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
+    LAMP_SOURCE_LETSGROW,
+    LAMP_SOURCE_SENSORS,
     LAMP_THRESHOLD,
+    LIT_HOUR_SHARE,
     LampState,
     lamp_state_grid,
 )
@@ -95,7 +98,9 @@ class TestLampStateGrid:
         empty = pd.DataFrame(columns=["time", "value"])
         grid = lamp_state_grid(empty, empty)
         assert grid.empty
-        assert list(grid.columns) == ["date", "hour", "state", "above_par", "canopy_par"]
+        assert list(grid.columns) == [
+            "date", "hour", "state", "above_par", "canopy_par", "source",
+        ]
 
     def test_carries_the_readings_behind_each_verdict(self):
         above, canopy = self._winter_day()
@@ -104,3 +109,73 @@ class TestLampStateGrid:
         lit = grid[grid["state"] == LampState.LIT].iloc[0]
         assert lit["canopy_par"] == LAMP_THRESHOLD * 3
         assert lit["above_par"] == 0.0
+
+
+def _on_fraction(day: date, fraction_by_hour: dict[int, float]) -> pd.Series:
+    """LetsGrow's verdict per hour, in the shape ``lamp_on_fraction`` returns."""
+    index = pd.DatetimeIndex(
+        [datetime(day.year, day.month, day.day, h, tzinfo=UTC) for h in fraction_by_hour]
+    )
+    return pd.Series(list(fraction_by_hour.values()), index=index, dtype=float)
+
+
+class TestLampStateGridFromLetsGrow:
+    """Where LetsGrow has reported, the switch decides; the sun still comes from PAR."""
+
+    day = date(2026, 1, 15)
+
+    def _bright_winter_day(self):
+        """Lamps on at 04-06 and at a bright midday, where the sun hides them."""
+        above = {h: (1200.0 if 9 <= h <= 15 else 0.0) for h in range(24)}
+        canopy = {h: value * 0.62 for h, value in above.items()}
+        canopy.update({h: 180.0 for h in (4, 5, 6)})
+        canopy[12] += 180.0
+        return above, canopy
+
+    def test_a_bright_lit_midday_shows_as_daylight_plus_lamps(self):
+        above, canopy = self._bright_winter_day()
+        lit = {h: (1.0 if h in (4, 5, 6, 12) else 0.0) for h in range(24)}
+
+        grid = lamp_state_grid(
+            _frame(self.day, above), _frame(self.day, canopy), _on_fraction(self.day, lit),
+        )
+
+        by_hour = grid.set_index("hour")["state"].to_dict()
+        assert by_hour[12] == LampState.DAYLIGHT_LIT
+        assert by_hour[5] == LampState.LIT
+        assert by_hour[13] == LampState.DAYLIGHT
+        assert by_hour[20] == LampState.DARK
+
+    def test_letsgrow_off_overrides_a_bright_canopy(self):
+        """A canopy brighter than the roof is no lamp if the switch was off."""
+        above, canopy = self._bright_winter_day()
+        off = dict.fromkeys(range(24), 0.0)
+
+        grid = lamp_state_grid(
+            _frame(self.day, above), _frame(self.day, canopy), _on_fraction(self.day, off),
+        )
+
+        assert not grid["state"].isin([LampState.LIT, LampState.DAYLIGHT_LIT]).any()
+
+    def test_a_mostly_off_hour_is_not_lit(self):
+        above, canopy = self._bright_winter_day()
+        brief = {h: 0.0 for h in range(24)} | {5: LIT_HOUR_SHARE - 0.1}
+
+        grid = lamp_state_grid(
+            _frame(self.day, above), _frame(self.day, canopy), _on_fraction(self.day, brief),
+        )
+
+        assert grid.set_index("hour").loc[5, "state"] == LampState.DARK
+
+    def test_hours_letsgrow_has_not_delivered_keep_the_sensor_reading(self):
+        above, canopy = self._bright_winter_day()
+        early = {h: 0.0 for h in range(4)}
+
+        grid = lamp_state_grid(
+            _frame(self.day, above), _frame(self.day, canopy), _on_fraction(self.day, early),
+        )
+
+        by_hour = grid.set_index("hour")
+        assert by_hour.loc[2, "source"] == LAMP_SOURCE_LETSGROW
+        assert by_hour.loc[5, "source"] == LAMP_SOURCE_SENSORS
+        assert by_hour.loc[5, "state"] == LampState.LIT

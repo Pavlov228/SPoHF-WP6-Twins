@@ -194,6 +194,16 @@ climate_model:
         cycle, so an empty house during changeover is the likely cause — UNCONFIRMED,
         awaiting Neurath/WP1.
 
+# Where LetsGrow reports the grow lights (red/lamp.py `LampStatusConfig`).
+# LetsGrow switches the lamps, so this is when and at what share they ran —
+# not how much light they put on a sensor, which is still measured from PAR.
+# `lg_led1_on` is not listed: over Oct 2025 - Nov 2026 it was never on without
+# the assimilation lighting, so the two act as one installation.
+lamps:
+  device: "letsgrow-grow-light-b4"
+  switch: lg_assim_light_on
+  share: lg_assim_light_pct
+
 sensor_defaults:
   temp:
     type: "temperature"

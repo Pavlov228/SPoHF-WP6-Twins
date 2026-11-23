@@ -3,23 +3,29 @@
 from datetime import date, timedelta
 from typing import Annotated
 
+import numpy as np
 import plotly.graph_objects as go
+import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
+from wp6_data.red import deps
 from wp6_data.red.dli import NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR, get_model
 from wp6_data.red.dli import data as dli_data
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
+    LAMP_SOURCE_LETSGROW,
     LAMP_THRESHOLD,
     RECENT_DAYS,
     LampState,
     derive_lamp_model,
+    lamp_on_fraction,
     lamp_state_grid,
 )
 from wp6_data.shared import render_date_filter, render_page, render_stat_grid, utc_day_bounds
 
 router = APIRouter()
+log = structlog.get_logger()
 
 PAGE_TITLE = "SPoHF Red - Lamp Calendar"
 
@@ -58,13 +64,16 @@ def _make_calendar(grid, start: date, end: date) -> go.Figure:
 
     canopy = grid.pivot_table(index="hour", columns="date", values="canopy_par", aggfunc="mean")
     canopy = canopy.reindex(index=range(24), columns=dates)
+    source = grid.pivot_table(index="hour", columns="date", values="source", aggfunc="first")
+    source = source.reindex(index=range(24), columns=dates)
+    hover = np.dstack([canopy.to_numpy(dtype=object), source.to_numpy(dtype=object)])
 
     fig = go.Figure(
         go.Heatmap(
             z=pivot.to_numpy().tolist(),
             x=[d.isoformat() for d in dates],
             y=[f"{h:02d}:00" for h in range(24)],
-            customdata=canopy.to_numpy().tolist(),
+            customdata=hover.tolist(),
             colorscale=_discrete_colorscale(),
             zmin=0.5,
             zmax=len(STATE_COLOURS) + 0.5,
@@ -79,7 +88,8 @@ def _make_calendar(grid, start: date, end: date) -> go.Figure:
                 "outlinewidth": 0,
             },
             hovertemplate=(
-                "%{x} %{y}<br>canopy PAR = %{customdata:.0f} µmol/m²/s<extra></extra>"
+                "%{x} %{y}<br>canopy PAR = %{customdata[0]:.0f} µmol/m²/s"
+                "<br>lamps from %{customdata[1]}<extra></extra>"
             ),
         )
     )
@@ -138,7 +148,17 @@ async def dli_lamps(
     above_df = par_df[par_df["device"] == NATURAL_LIGHT_SENSOR]
     canopy_df = par_df[par_df["device"] == TOTAL_LIGHT_SENSOR]
 
-    grid = lamp_state_grid(above_df, canopy_df)
+    # LetsGrow switches the lamps, so where it has reported, it says whether they
+    # ran; the PAR sensors still say whether the sun was up. Its absence (down,
+    # or not yet delivered) leaves those hours to the sensors, labelled as such.
+    try:
+        status_df = await dli_data.get_lamp_status_readings(start_dt, end_dt)
+        on_fraction = lamp_on_fraction(status_df, deps.lamp_status)
+    except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
+        log.warning("lamp_status_unavailable", error=str(e))
+        on_fraction = None
+
+    grid = lamp_state_grid(above_df, canopy_df, on_fraction)
 
     # The same model /dli/forecast runs on, so the two pages cannot disagree
     # about whether the lamps are running now. The grid classifies the past from
@@ -176,11 +196,19 @@ async def dli_lamps(
         current = "Off"
         current_sub = f"last {min(RECENT_DAYS, observed_days)} days"
 
+    from_letsgrow = grid[grid["source"] == LAMP_SOURCE_LETSGROW]
+    if from_letsgrow.empty:
+        source, source_sub = "PAR sensors", "LetsGrow has no lamp data here"
+    else:
+        source = LAMP_SOURCE_LETSGROW
+        source_sub = f"through {max(from_letsgrow['date']):%d %b %Y}; sensors after"
+
     stats_html = render_stat_grid([
         (f"{lit_days}", "Days with lamps", f"of {observed_days} observed"),
         (f"{len(lit)}", "Lamp hours", "in this range"),
         (f"{lamp_hours_per_lit_day:.1f}", "Hours per lamp day", "average"),
-        (current, "Current schedule", current_sub),
+        (source, "Lamp on/off from", source_sub),
+        (current, "Forecast schedule", current_sub),
     ])
 
     chart_html = _make_calendar(grid, start, end).to_html(
@@ -189,23 +217,24 @@ async def dli_lamps(
 
     content = f"""
         <h1>Lamp Calendar</h1>
-        <p>Every hour of every day, coloured by what the two PAR sensors say was
-        lighting the crop.</p>
+        <p>Every hour of every day, coloured by what was lighting the crop: the sun,
+        read off the roof PAR sensor, and the lamps, as LetsGrow switched them.</p>
         {filter_html}
         {stats_html}
         {chart_html}
         <small>
-            <strong>Lamps only</strong>: the canopy sensor ({TOTAL_LIGHT_SENSOR}) reads
-            above {LAMP_THRESHOLD:.0f} µmol/m²/s while the above-lamp sensor
-            ({NATURAL_LIGHT_SENSOR}) sees less than {DAYLIGHT_THRESHOLD:.0f} — light at
-            the crop with no sun to explain it.<br/>
-            <strong>Daylight + lamps</strong>: the sun is up, and the canopy is brighter
-            than the roof sensor can account for by more than half the measured lamp
-            level. Red runs its lamps through the short winter day, so this is most of
-            the winter schedule.
-            Gaps are hours with no usable reading, not hours that were dark — including
-            whole days the sensors were switched off or out of the greenhouse, which
-            report zeros rather than nothing.
+            <strong>Daylight</strong>: the above-lamp sensor ({NATURAL_LIGHT_SENSOR})
+            reads at least {DAYLIGHT_THRESHOLD:.0f} µmol/m²/s.
+            <strong>Lamps</strong>: LetsGrow, Neurath's climate computer, had them on
+            for most of the hour. It switches the lamps, so this is the record rather
+            than an inference — including on bright winter middays, where the lamp is
+            invisible next to the sun. LetsGrow arrives about two days late; hours
+            after its last delivery fall back to the PAR sensors (canopy above
+            {LAMP_THRESHOLD:.0f} µmol/m²/s with no sun, or brighter than the roof
+            sensor in daylight). Hover a cell to see which applied.<br/>
+            <strong>Forecast schedule</strong> is what /dli/forecast still assumes for
+            the days ahead: the hours lit on most of the last {RECENT_DAYS} days.
+            Gaps are hours with no usable PAR reading, not hours that were dark.
         </small>
     """
 

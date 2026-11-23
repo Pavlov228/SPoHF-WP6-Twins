@@ -233,3 +233,11 @@ def compute_daily_predicted_dli(
         )
         for f in forecasts
     }
+
+
+def daily_lamp_dli(lamp_par: pd.Series) -> dict[date, float]:
+    """Lamp DLI per UTC day from hourly lamp PAR (see ``lamp.observed_lamp_par``)."""
+    if lamp_par.empty:
+        return {}
+    by_day = lamp_par.groupby(lamp_par.index.date).sum()
+    return {d: hourly_par_sum_to_dli(float(v)) for d, v in by_day.items()}

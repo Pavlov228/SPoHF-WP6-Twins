@@ -8,6 +8,7 @@ from wp6_data.config import ObjectStoreSettings, RedSettings, Settings
 from wp6_data.red.db import MySQLConnection
 from wp6_data.red.dli import OpenMeteoClient
 from wp6_data.red.growth_sections import load_growth_sections
+from wp6_data.red.lamp import load_lamp_status
 from wp6_data.shared.blob import make_store
 from wp6_data.shared.metadata import MetadataRegistry
 
@@ -20,6 +21,8 @@ metadata = MetadataRegistry(_METADATA_PATH)
 # Red-only canopy zones over wire heights (CONTEXT "Growth section"); the shared
 # metadata registry ignores this key, so it is loaded separately here.
 growth_sections = load_growth_sections(_METADATA_PATH)
+# Where LetsGrow reports the grow lights (CONTEXT "Lamp model").
+lamp_status = load_lamp_status(_METADATA_PATH)
 
 # MySQL connection settings
 DB_HOST = settings.db_host
