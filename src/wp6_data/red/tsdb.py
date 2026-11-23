@@ -319,3 +319,60 @@ async def fetch_sync_metrics_tsdb() -> list[dict[str, Any]]:
             letsgrow.FRESHNESS_BUDGET_HOURS if r["endpoint"] == letsgrow.ENDPOINT else None
         )
     return rows
+
+
+async def fetch_lamp_on_fraction(
+    device: str,
+    switch: str,
+    share: str,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    *,
+    pool: AsyncConnectionPool | None = None,
+) -> pd.Series:
+    """Share of each UTC hour the lamps ran, from LetsGrow's switch and share tags.
+
+    Per LetsGrow tick: ``share / 100`` while the switch is on, else 0; then the
+    hour's mean. 1.0 is a whole hour at full output, 0.5 half an hour or half the
+    installation. Hours LetsGrow did not report are absent, never zero.
+
+    Aggregated here rather than in pandas because the raw rows outgrow any
+    reasonable cap: two tags every five minutes since February 2023 was ~790k
+    rows, and ``fetch_data_tsdb``'s oldest-first 500k cap silently returned
+    only up to mid-2025 — so /dli/lamps fell back to the PAR sensors for every
+    hour it actually drew. One row per hour cannot be truncated that way.
+    """
+    from wp6_data.db.pool import get_pool
+
+    conditions = ["s.device_name = %(device)s", "s.sensor_tag = %(switch)s"]
+    params: dict[str, Any] = {"device": device, "switch": switch, "share": share}
+    if start is not None:
+        conditions.append("s.time >= %(start)s")
+        params["start"] = start
+    if end is not None:
+        conditions.append("s.time <= %(end)s")
+        params["end"] = end
+
+    query = f"""
+        SELECT time_bucket('1 hour', s.time) AS hour,
+               avg(CASE WHEN s.value >= 0.5
+                        THEN LEAST(GREATEST(p.value, 0), 100) / 100.0
+                        ELSE 0 END) AS on_fraction
+        FROM readings s
+        JOIN readings p
+          ON p.device_name = s.device_name
+         AND p.time = s.time
+         AND p.sensor_tag = %(share)s
+        WHERE {" AND ".join(conditions)}
+          AND s.value IS NOT NULL AND p.value IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+    """
+    async with (pool or get_pool()).connection() as conn, conn.cursor() as cur:
+        await cur.execute(query, params)
+        rows = await cur.fetchall()
+
+    if not rows:
+        return pd.Series(dtype=float)
+    index = pd.to_datetime([r[0] for r in rows], utc=True)
+    return pd.Series([float(r[1]) for r in rows], index=index, dtype=float)

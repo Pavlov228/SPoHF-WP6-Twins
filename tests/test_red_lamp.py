@@ -22,11 +22,9 @@ from wp6_data.red.lamp import (
     RECENT_DAYS,
     LampModel,
     LampState,
-    LampStatusConfig,
     compute_attenuation,
     derive_lamp_model,
     lamp_level_by_date,
-    lamp_on_fraction,
     lamp_state_grid,
     load_lamp_status,
     observed_lamp_par,
@@ -352,20 +350,13 @@ class TestLampStateGridOverlap:
 
 # ── Lamp state from LetsGrow ─────────────────────────────────────────────────
 
-_CONFIG = LampStatusConfig(device="lg-lights", switch="on_tag", share="pct_tag")
 _ATTENUATION = 0.62
 
 
-def _status(index, switch, share):
-    """LetsGrow's two lamp tags at ``index``, in the ``fetch_data_tsdb`` shape."""
-    switch = np.broadcast_to(np.asarray(switch, dtype=float), len(index))
-    share = np.broadcast_to(np.asarray(share, dtype=float), len(index))
-    return pd.concat([
-        pd.DataFrame({"device": _CONFIG.device, "sensor": _CONFIG.switch,
-                      "time": index, "value": switch}),
-        pd.DataFrame({"device": _CONFIG.device, "sensor": _CONFIG.share,
-                      "time": index, "value": share}),
-    ])
+def _fraction(index, share):
+    """LetsGrow's hourly on-fraction at ``index``, as ``get_lamp_on_fraction`` returns it."""
+    return pd.Series(np.broadcast_to(np.asarray(share, dtype=float), len(index)),
+                     index=index, dtype=float)
 
 
 def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01"):
@@ -380,52 +371,14 @@ def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01"):
     lit = np.isin(hour, list(lit_hours))
     level = np.broadcast_to(np.asarray(lamp_level, dtype=float), len(index))
     canopy = natural * _ATTENUATION + np.where(lit, level, 0.0)
-    status = _status(index, lit.astype(float), 100.0)
-    return _series(index, natural), _series(index, canopy), status
-
-
-class TestLampOnFraction:
-    def test_a_whole_hour_at_full_share_is_one(self):
-        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
-
-        fraction = lamp_on_fraction(_status(index, 1, 100), _CONFIG)
-
-        assert fraction.iloc[0] == pytest.approx(1.0)
-
-    def test_half_the_installation_is_half(self):
-        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
-
-        fraction = lamp_on_fraction(_status(index, 1, 50), _CONFIG)
-
-        assert fraction.iloc[0] == pytest.approx(0.5)
-
-    def test_switched_off_is_zero_whatever_the_share_says(self):
-        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
-
-        fraction = lamp_on_fraction(_status(index, 0, 100), _CONFIG)
-
-        assert fraction.iloc[0] == 0.0
-
-    def test_an_hour_letsgrow_did_not_report_is_absent_not_off(self):
-        index = pd.date_range("2026-01-01", periods=12, freq="5min", tz="UTC")
-        later = pd.date_range("2026-01-01 03:00", periods=12, freq="5min", tz="UTC")
-        status = pd.concat([_status(index, 1, 100), _status(later, 1, 100)])
-
-        fraction = lamp_on_fraction(status, _CONFIG)
-
-        assert pd.Timestamp("2026-01-01 01:00", tz="UTC") not in fraction.index
-
-    def test_no_letsgrow_rows_give_an_empty_series(self):
-        empty = pd.DataFrame(columns=["device", "sensor", "time", "value"])
-
-        assert lamp_on_fraction(empty, _CONFIG).empty
+    return _series(index, natural), _series(index, canopy), _fraction(index, lit.astype(float))
 
 
 class TestLampLevel:
     def test_the_level_is_read_on_dark_hours_letsgrow_says_were_lit(self):
         natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, 2))
 
-        level = lamp_level_by_date(natural, canopy, lamp_on_fraction(status, _CONFIG))
+        level = lamp_level_by_date(natural, canopy, status)
 
         assert level.dropna().to_numpy() == pytest.approx(180.0)
 
@@ -438,7 +391,7 @@ class TestLampLevel:
             days, np.repeat(per_day, 24), (23, 0, 1, 2), start="2026-01-01",
         )
 
-        level = lamp_level_by_date(natural, canopy, lamp_on_fraction(status, _CONFIG))
+        level = lamp_level_by_date(natural, canopy, status)
 
         assert level[index_days[0].date()] == pytest.approx(188.0)
         assert level[index_days[-1].date()] == pytest.approx(140.0)
@@ -447,10 +400,10 @@ class TestLampLevel:
         index = pd.date_range("2026-01-01", periods=48, freq="h", tz="UTC")
         dark = np.zeros(len(index))
         canopy = np.full(len(index), 90.0)
-        half = _status(index, 1, 100 * (LAMP_FULL_ON - 0.1))
+        half = _fraction(index, LAMP_FULL_ON - 0.1)
 
         level = lamp_level_by_date(
-            _series(index, dark), _series(index, canopy), lamp_on_fraction(half, _CONFIG),
+            _series(index, dark), _series(index, canopy), half,
         )
 
         assert level.empty
@@ -461,7 +414,7 @@ class TestObservedLampPar:
         noon = 12
         natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, noon))
 
-        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+        lamp, _ = observed_lamp_par(natural, canopy, status)
 
         at_noon = lamp[lamp.index.hour == noon]
         assert at_noon.to_numpy() == pytest.approx(180.0)
@@ -469,7 +422,7 @@ class TestObservedLampPar:
     def test_hours_letsgrow_says_were_off_add_nothing(self):
         natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1))
 
-        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+        lamp, _ = observed_lamp_par(natural, canopy, status)
 
         assert (lamp[lamp.index.hour.isin([3, 12, 20])] == 0.0).all()
 
@@ -477,7 +430,7 @@ class TestObservedLampPar:
         lit_hours = (23, 0, 1, 2, 12)
         natural, canopy, status = _greenhouse(10, 180.0, lit_hours)
 
-        lamp, _ = observed_lamp_par(natural, canopy, lamp_on_fraction(status, _CONFIG))
+        lamp, _ = observed_lamp_par(natural, canopy, status)
 
         one_day = lamp[lamp.index.date == date(2025, 12, 5)].sum()
         expected = 180.0 * len(lit_hours) * SECONDS_PER_HOUR / UMOL_TO_MOL
@@ -486,9 +439,9 @@ class TestObservedLampPar:
     def test_hours_after_the_last_delivery_fall_back_to_the_detector(self):
         natural, canopy, status = _greenhouse(10, 180.0, (23, 0, 1, 2))
         delivered_until = pd.Timestamp("2025-12-08", tz="UTC")
-        late = status[status["time"] < delivered_until]
+        late = status[status.index < delivered_until]
 
-        lamp, covered = observed_lamp_par(natural, canopy, lamp_on_fraction(late, _CONFIG))
+        lamp, covered = observed_lamp_par(natural, canopy, late)
 
         assert covered < delivered_until
         after = lamp[(lamp.index >= delivered_until) & (lamp.index.hour == 0)]
@@ -526,17 +479,15 @@ class TestForecastFromLetsGrow:
     def _lit_every_other_midday(self, days=RECENT_DAYS):
         """Lamps at night every day, at 12:00 only on alternate (dull) days."""
         natural, canopy, status = _greenhouse(days, 180.0, (23, 0, 1, 2))
-        times = pd.to_datetime(status["time"], utc=True)
-        midday = (times.dt.hour == 12) & (times.dt.day % 2 == 0)
-        on = (status["sensor"] == _CONFIG.switch) & midday
-        status.loc[on, "value"] = 1.0
+        midday = (status.index.hour == 12) & (status.index.day % 2 == 0)
+        status[midday] = 1.0
         return natural, canopy, status
 
     def test_an_hour_lit_on_half_the_days_adds_half_the_lamp(self):
         natural, canopy, status = self._lit_every_other_midday()
 
         lamp = derive_lamp_model(
-            natural, canopy, on_fraction=lamp_on_fraction(status, _CONFIG),
+            natural, canopy, on_fraction=status,
         )
 
         assert lamp.share_at(12) == pytest.approx(0.5, abs=0.1)
@@ -550,7 +501,7 @@ class TestForecastFromLetsGrow:
         natural, canopy, status = self._lit_every_other_midday()
 
         lamp = derive_lamp_model(
-            natural, canopy, on_fraction=lamp_on_fraction(status, _CONFIG),
+            natural, canopy, on_fraction=status,
         )
 
         assert sum(lamp.hourly_schedule().values()) == pytest.approx(
@@ -562,7 +513,7 @@ class TestForecastFromLetsGrow:
         index = pd.date_range("2025-12-01", periods=RECENT_DAYS * 24, freq="h", tz="UTC")
 
         lamp = derive_lamp_model(
-            natural, canopy, on_fraction=lamp_on_fraction(_status(index, 0, 100), _CONFIG),
+            natural, canopy, on_fraction=_fraction(index, 0.0),
         )
 
         assert not lamp.is_lighting
@@ -581,7 +532,7 @@ class TestForecastFromLetsGrow:
 
         lamp = derive_lamp_model(
             natural, canopy, attenuation=_ATTENUATION,
-            on_fraction=lamp_on_fraction(status, _CONFIG),
+            on_fraction=status,
         )
 
         assert lamp.schedule_source == LAMP_SOURCE_LETSGROW

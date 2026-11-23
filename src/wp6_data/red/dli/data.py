@@ -67,21 +67,18 @@ async def get_weather_station_readings(
     )
 
 
-async def get_lamp_status_readings(
-    start: datetime,
-    end: datetime,
-) -> pd.DataFrame:
-    """LetsGrow's lamp switch and share, for :func:`red.lamp.lamp_on_fraction`.
+async def get_lamp_on_fraction(
+    start: datetime | None,
+    end: datetime | None,
+) -> pd.Series:
+    """Share of each hour the lamps ran, per LetsGrow — see ``red.tsdb.fetch_lamp_on_fraction``.
 
     From red's TimescaleDB, where the LetsGrow sync lands — not the MySQL feed
     the PAR readings come from. Which device and tags is ``deps.lamp_status``.
     """
-    from wp6_data.red.tsdb import fetch_data_tsdb
+    from wp6_data.red.tsdb import fetch_lamp_on_fraction
 
     config = deps.lamp_status
-    return await fetch_data_tsdb(
-        sensor_tags=[config.switch, config.share],
-        device_names=[config.device],
-        start=start,
-        end=end,
+    return await fetch_lamp_on_fraction(
+        config.device, config.switch, config.share, start, end,
     )

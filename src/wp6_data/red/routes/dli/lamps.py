@@ -9,14 +9,12 @@ import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
-from wp6_data.red import deps
 from wp6_data.red.dli import NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR
 from wp6_data.red.dli import data as dli_data
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
     LAMP_THRESHOLD,
     LampState,
-    lamp_on_fraction,
     lamp_state_grid,
 )
 from wp6_data.shared import render_date_filter, render_page, utc_day_bounds
@@ -147,8 +145,7 @@ async def dli_lamps(
     # ran; the PAR sensors still say whether the sun was up. Its absence (down,
     # or not yet delivered) leaves those hours to the sensors, labelled as such.
     try:
-        status_df = await dli_data.get_lamp_status_readings(start_dt, end_dt)
-        on_fraction = lamp_on_fraction(status_df, deps.lamp_status)
+        on_fraction = await dli_data.get_lamp_on_fraction(start_dt, end_dt)
     except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
         log.warning("lamp_status_unavailable", error=str(e))
         on_fraction = None

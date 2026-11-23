@@ -32,7 +32,7 @@ from wp6_data.red.dli import (
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, lamp_on_fraction, observed_lamp_par
+from wp6_data.red.lamp import RECENT_DAYS, observed_lamp_par
 from wp6_data.shared import (
     pill_row,
     render_date_filter,
@@ -196,21 +196,17 @@ async def dli_performance(
         except Exception as e:
             return _page(header + f"<h1>Error: {e}</h1>")
         try:
-            status_df = await dli_data.get_lamp_status_readings(lamp_window_start, end_dt)
+            on_fraction = await dli_data.get_lamp_on_fraction(lamp_window_start, end_dt)
         except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR detector
             log.warning("lamp_status_unavailable", error=str(e))
-            status_df = None
-        on_fraction = (
-            lamp_on_fraction(status_df, deps.lamp_status)
-            if status_df is not None else None
-        )
+            on_fraction = None
         lamp_par, covered_until = observed_lamp_par(
             lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
             lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
             on_fraction if on_fraction is not None else pd.Series(dtype=float),
         )
         lamp_dli = daily_lamp_dli(lamp_par)
-        lamp_note = _lamp_note(covered_until, end, status_df is None)
+        lamp_note = _lamp_note(covered_until, end, on_fraction is None)
 
     client = deps.get_weather_client()
     try:

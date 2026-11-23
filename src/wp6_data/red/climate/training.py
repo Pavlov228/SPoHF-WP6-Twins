@@ -35,7 +35,6 @@ import pandas as pd  # type: ignore[import-untyped]
 import structlog
 from starlette.concurrency import run_in_threadpool
 
-from wp6_data.red import deps
 from wp6_data.red.climate import data as climate_data
 from wp6_data.red.climate.config import ClimateModelConfig
 from wp6_data.red.climate.downscale import DownscaleStats, WireDownscaler
@@ -48,8 +47,8 @@ from wp6_data.red.climate.model import (
     write_artifact,
 )
 from wp6_data.red.db import WIRE_SENSOR_HEIGHTS
-from wp6_data.red.dli.data import get_lamp_status_readings
-from wp6_data.red.lamp import LampModel, derive_lamp_model, lamp_on_fraction
+from wp6_data.red.dli.data import get_lamp_on_fraction
+from wp6_data.red.lamp import LampModel, derive_lamp_model
 from wp6_data.red.wires import wire_ids
 from wp6_data.shared.weather import OpenMeteoClient
 
@@ -240,9 +239,7 @@ async def train_chain(
     # The same lamp model /dli/forecast uses, LetsGrow included, so the two
     # pages cannot disagree about what the lamps are doing.
     try:
-        on_fraction = lamp_on_fraction(
-            await get_lamp_status_readings(start, end), deps.lamp_status,
-        )
+        on_fraction = await get_lamp_on_fraction(start, end)
     except Exception as exc:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
         log.warning("lamp_status_unavailable", error=str(exc))
         on_fraction = None

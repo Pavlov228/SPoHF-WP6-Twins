@@ -386,11 +386,11 @@ def lamp_state_grid(
     The same gate the model's training uses, and it separates cleanly: the
     dimmest real December day still reads 25x it.
 
-    With ``on_fraction`` (LetsGrow, see :func:`lamp_on_fraction`), every hour
-    LetsGrow reported takes its on/off from the switch itself, and only the
-    daylight/dark split comes from the roof sensor. Hours after its last
-    delivery, or with no LetsGrow at all, keep the sensor reading. ``source``
-    says which applied, per hour.
+    With ``on_fraction`` (LetsGrow's hourly share, see
+    ``red.tsdb.fetch_lamp_on_fraction``), every hour LetsGrow reported takes
+    its on/off from the switch itself, and only the daylight/dark split comes
+    from the roof sensor. Hours after its last delivery, or with no LetsGrow
+    at all, keep the sensor reading. ``source`` says which applied, per hour.
 
     Returns ``date, hour, state, above_par, canopy_par, source``.
     """
@@ -791,26 +791,6 @@ def load_lamp_status(yaml_path: Path) -> LampStatusConfig:
     if "lamps" not in raw:
         raise ValueError(f"no 'lamps' block in {yaml_path}")
     return LampStatusConfig(**raw["lamps"])
-
-
-def lamp_on_fraction(status_df: pd.DataFrame, config: LampStatusConfig) -> pd.Series:
-    """Share of each hour the lamps ran, scaled by the share of the installation on.
-
-    ``status_df`` is a ``device, sensor, time, value`` frame of the two LetsGrow
-    tags. 1.0 is a whole hour at full output; 0.5 is half an hour, or a whole
-    hour at half the installation. Hours LetsGrow did not report are **absent**,
-    never zero: "not delivered yet" is not "off".
-    """
-    if status_df.empty:
-        return pd.Series(dtype=float)
-    frame = status_df[status_df["device"] == config.device]
-    wide = frame.pivot_table(index="time", columns="sensor", values="value", aggfunc="mean")
-    if config.switch not in wide.columns or config.share not in wide.columns:
-        return pd.Series(dtype=float)
-    wide = wide[[config.switch, config.share]].dropna()
-    running = (wide[config.switch] >= 0.5).astype(float) * wide[config.share].clip(0, 100) / 100
-    running.index = pd.to_datetime(running.index, utc=True)
-    return running.resample("1h").mean().dropna()
 
 
 def lamp_level_by_date(

@@ -24,7 +24,7 @@ from wp6_data.red.dli import (
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model, lamp_on_fraction
+from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model
 from wp6_data.shared import make_schedule_chart, render_page, render_stat_grid, utc_day_bounds
 from wp6_data.shared.time import display_tz
 
@@ -88,8 +88,7 @@ async def dli_forecast(
     # bright middays the PAR sensors cannot see a lamp in. Unreachable, it falls
     # back to the sensors, and the note below says which was used.
     try:
-        status_df = await dli_data.get_lamp_status_readings(lamp_window_start, lamp_window_end)
-        on_fraction = lamp_on_fraction(status_df, deps.lamp_status)
+        on_fraction = await dli_data.get_lamp_on_fraction(lamp_window_start, lamp_window_end)
     except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
         log.warning("lamp_status_unavailable", error=str(e))
         on_fraction = None
