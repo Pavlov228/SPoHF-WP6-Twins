@@ -10,19 +10,16 @@ from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
 from wp6_data.red import deps
-from wp6_data.red.dli import NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR, get_model
+from wp6_data.red.dli import NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR
 from wp6_data.red.dli import data as dli_data
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
-    LAMP_SOURCE_LETSGROW,
     LAMP_THRESHOLD,
-    RECENT_DAYS,
     LampState,
-    derive_lamp_model,
     lamp_on_fraction,
     lamp_state_grid,
 )
-from wp6_data.shared import render_date_filter, render_page, render_stat_grid, utc_day_bounds
+from wp6_data.shared import render_date_filter, render_page, utc_day_bounds
 
 router = APIRouter()
 log = structlog.get_logger()
@@ -115,8 +112,6 @@ async def dli_lamps(
         return render_page(PAGE_TITLE, "<h1>Database not connected</h1>",
                           show_back_link=True, back_url="/dli")
 
-    model = await get_model()
-
     today = date.today()
     if end is None:
         end = today
@@ -160,15 +155,6 @@ async def dli_lamps(
 
     grid = lamp_state_grid(above_df, canopy_df, on_fraction)
 
-    # The same model /dli/forecast runs on, so the two pages cannot disagree
-    # about whether the lamps are running now. The grid classifies the past from
-    # the readings alone and needs nothing from it.
-    lamp = derive_lamp_model(
-        above_df, canopy_df,
-        attenuation=model.attenuation_factor if model.is_trained() else None,
-        on_fraction=on_fraction,
-    )
-
     if grid.empty:
         return render_page(
             PAGE_TITLE,
@@ -184,33 +170,6 @@ async def dli_lamps(
         start = data_start
     filter_html = render_date_filter(start, end, all_start=data_start)
 
-    lit = grid[grid["state"].isin([LampState.LIT, LampState.DAYLIGHT_LIT])]
-    lit_days = lit["date"].nunique()
-    observed_days = grid["date"].nunique()
-    lamp_hours_per_lit_day = (len(lit) / lit_days) if lit_days else 0.0
-
-    if lamp.is_lighting:
-        current = f"{lamp.lamp_hours_per_day:.1f} h/day"
-        current_sub = f"at {lamp.power_par:.0f} µmol/m²/s, per {lamp.schedule_source}"
-    else:
-        current = "Off"
-        current_sub = f"last {min(RECENT_DAYS, observed_days)} days"
-
-    from_letsgrow = grid[grid["source"] == LAMP_SOURCE_LETSGROW]
-    if from_letsgrow.empty:
-        source, source_sub = "PAR sensors", "LetsGrow has no lamp data here"
-    else:
-        source = LAMP_SOURCE_LETSGROW
-        source_sub = f"through {max(from_letsgrow['date']):%d %b %Y}; sensors after"
-
-    stats_html = render_stat_grid([
-        (f"{lit_days}", "Days with lamps", f"of {observed_days} observed"),
-        (f"{len(lit)}", "Lamp hours", "in this range"),
-        (f"{lamp_hours_per_lit_day:.1f}", "Hours per lamp day", "average"),
-        (source, "Lamp on/off from", source_sub),
-        (current, "Forecast schedule", current_sub),
-    ])
-
     chart_html = _make_calendar(grid, start, end).to_html(
         full_html=False, include_plotlyjs="cdn"
     )
@@ -220,7 +179,6 @@ async def dli_lamps(
         <p>Every hour of every day, coloured by what was lighting the crop: the sun,
         read off the roof PAR sensor, and the lamps, as LetsGrow switched them.</p>
         {filter_html}
-        {stats_html}
         {chart_html}
         <small>
             <strong>Daylight</strong>: the above-lamp sensor ({NATURAL_LIGHT_SENSOR})
@@ -232,9 +190,6 @@ async def dli_lamps(
             after its last delivery fall back to the PAR sensors (canopy above
             {LAMP_THRESHOLD:.0f} µmol/m²/s with no sun, or brighter than the roof
             sensor in daylight). Hover a cell to see which applied.<br/>
-            <strong>Forecast schedule</strong> is what /dli/forecast assumes for the
-            days ahead: each hour's share of the last {RECENT_DAYS} days the lamps ran,
-            summed — the lamps' expected hours a day.
             Gaps are hours with no usable PAR reading, not hours that were dark.
         </small>
     """
