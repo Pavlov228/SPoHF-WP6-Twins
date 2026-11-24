@@ -1,9 +1,11 @@
 """GET /dli/lamps — When the lamps are on, as a date × hour calendar heatmap."""
 
+from calendar import monthrange
 from datetime import date, timedelta
 from typing import Annotated
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import structlog
 from fastapi import APIRouter, Query
@@ -121,38 +123,92 @@ def _make_calendar(grid, start: date, end: date) -> go.Figure:
 _OVERLAY_YEAR = 2000
 
 
+def _month_end_totals(year_rows: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Year-to-date total of ``column`` at each month end the data reaches.
+
+    ``year_rows`` is one year of :func:`daily_light_hours`, indexed by date.
+    Only complete days are in it, so a total can undercount; ``counted`` and
+    ``elapsed`` say by how much — days summed against calendar days so far —
+    so a short year (one that starts in February, or lost a week) shows it.
+
+    Returns ``date, total, counted, elapsed``.
+    """
+    columns = ["date", "total", "counted", "elapsed"]
+    if year_rows.empty:
+        return pd.DataFrame(columns=columns)
+    first, last = min(year_rows.index), max(year_rows.index)
+    year_start = date(first.year, 1, 1)
+    rows = []
+    for month in range(first.month, last.month + 1):
+        month_end = date(first.year, month, monthrange(first.year, month)[1])
+        if month_end > last:
+            break
+        so_far = year_rows[year_rows.index <= month_end]
+        rows.append([
+            month_end, int(so_far[column].sum()), len(so_far), (month_end - year_start).days + 1,
+        ])
+    return pd.DataFrame(rows, columns=columns)
+
+
 def _make_hours_by_year(daily, hours: str) -> go.Figure:
-    """One daily count per year, one colour per year, laid on one calendar."""
+    """One daily count per year, one colour per year, laid on one calendar.
+
+    Markers at each month end carry the year-to-date total on a second axis,
+    because daily hours hide how years compare in sum.
+    """
     column, label = HOURS_COLUMNS[hours], HOURS_LABELS[hours]
     fig = go.Figure()
     years = sorted({d.year for d in daily["date"]})
     for i, year in enumerate(years):
         rows = daily[[d.year == year for d in daily["date"]]].set_index("date")
+        totals = _month_end_totals(rows, column)
         # Every day between the year's first and last, so a missing day breaks
         # the line instead of being bridged.
         first, last = min(rows.index), max(rows.index)
         days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
         rows = rows.reindex(days)
+        colour = CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)]
         fig.add_trace(go.Scatter(
             x=[d.replace(year=_OVERLAY_YEAR) for d in days],
             y=rows[column],
             customdata=[d.isoformat() for d in days],
             mode="lines",
             name=str(year),
-            line={"color": CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)], "width": 1.5},
+            legendgroup=str(year),
+            line={"color": colour, "width": 1.5},
             connectgaps=False,
             hovertemplate=f"%{{customdata}}<br>{label}: %{{y}} h<extra></extra>",
         ))
+        if not totals.empty:
+            fig.add_trace(go.Scatter(
+                x=[d.replace(year=_OVERLAY_YEAR) for d in totals["date"]],
+                y=totals["total"],
+                customdata=totals[["counted", "elapsed"]].to_numpy().tolist(),
+                text=[d.isoformat() for d in totals["date"]],
+                mode="lines+markers",
+                name=f"{year} year to date",
+                legendgroup=str(year),
+                showlegend=False,
+                yaxis="y2",
+                marker={"color": colour, "size": 8, "line": {"color": "white", "width": 1}},
+                line={"color": colour, "width": 1, "dash": "dot"},
+                hovertemplate=(
+                    f"{year} to %{{text}}<br>{label}: %{{y:,}} h so far"
+                    "<br>from %{customdata[0]} of %{customdata[1]} days<extra></extra>"
+                ),
+            ))
     fig.update_layout(
         template="plotly_white",
         height=420,
-        margin={"l": 60, "r": 20, "t": 20, "b": 40},
+        margin={"l": 60, "r": 60, "t": 20, "b": 40},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         hovermode="closest",
         xaxis={"title": "", "tickformat": "%b", "dtick": "M1",
                "range": [date(_OVERLAY_YEAR, 1, 1), date(_OVERLAY_YEAR, 12, 31)]},
         yaxis={"title": f"{label} per day", "range": [0, 24], "dtick": 4},
+        yaxis2={"title": "Year to date (h)", "overlaying": "y", "side": "right",
+                "rangemode": "tozero", "showgrid": False},
     )
     return fig
 
@@ -246,7 +302,9 @@ async def dli_lamps(
         <p>Each year on the same calendar, one line per year. <strong>Lamp-hours</strong>:
         hours the lamps ran. <strong>Light-hours</strong>: hours with any light on
         the crop — sun, lamps or both. Click a year in the legend to hide it,
-        double-click to show only that one.</p>
+        double-click to show only that one. Dots mark each month end with the
+        year's total so far, on the right-hand axis; hover one to see how many
+        days it counts, since a year that starts late or misses days sums short.</p>
         {toggle_html}
         {hours_html}
         <small>

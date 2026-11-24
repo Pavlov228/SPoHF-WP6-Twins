@@ -167,9 +167,10 @@ class TestHoursByYearChart:
         lamps = _make_hours_by_year(self._daily(), LAMP_HOURS)
         light = _make_hours_by_year(self._daily(), LIGHT_HOURS)
 
-        assert [t.name for t in lamps.data] == ["2025", "2026"]
-        assert [list(t.y) for t in lamps.data] == [[16], [15]]
-        assert [list(t.y) for t in light.data] == [[18], [17]]
+        assert [t.name for t in lamps.data if t.showlegend is not False] == ["2025", "2026"]
+        daily_lines = [t for t in lamps.data if t.yaxis != "y2"]
+        assert [list(t.y) for t in daily_lines] == [[16], [15]]
+        assert [list(t.y) for t in light.data if t.yaxis != "y2"] == [[18], [17]]
 
     def test_years_share_one_calendar(self):
         from wp6_data.red.routes.dli.lamps import LAMP_HOURS, _make_hours_by_year
@@ -177,3 +178,26 @@ class TestHoursByYearChart:
         fig = _make_hours_by_year(self._daily(), LAMP_HOURS)
 
         assert fig.data[0].x == fig.data[1].x
+
+
+class TestMonthEndTotals:
+    def _year(self, first: date, days: int, per_day: int) -> pd.DataFrame:
+        dates = [first + timedelta(days=n) for n in range(days)]
+        return pd.DataFrame({"lamp_hours": [per_day] * days}, index=pd.Index(dates, name="date"))
+
+    def test_sums_the_year_to_each_month_end_the_data_reaches(self):
+        from wp6_data.red.routes.dli.lamps import _month_end_totals
+
+        totals = _month_end_totals(self._year(date(2026, 1, 1), 70, 10), "lamp_hours")
+
+        assert totals["date"].tolist() == [date(2026, 1, 31), date(2026, 2, 28)]
+        assert totals["total"].tolist() == [31 * 10, 59 * 10]
+
+    def test_a_late_starting_year_says_how_many_days_it_counts(self):
+        from wp6_data.red.routes.dli.lamps import _month_end_totals
+
+        totals = _month_end_totals(self._year(date(2023, 2, 11), 18, 10), "lamp_hours")
+
+        row = totals.iloc[0]
+        assert row["date"] == date(2023, 2, 28)
+        assert (row["counted"], row["elapsed"]) == (18, 31 + 28)
