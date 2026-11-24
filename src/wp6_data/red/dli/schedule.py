@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from datetime import date, timedelta
 
 import pandas as pd
@@ -59,6 +61,7 @@ def predict_natural_dli_from_weather(
     forecasts: list[DailyForecast],
     *,
     at_plant_level: bool = True,
+    attenuation: float | Mapping[date, float] | None = None,
 ) -> dict[date, float]:
     """Predict natural DLI for each day from weather forecasts.
 
@@ -73,6 +76,9 @@ def predict_natural_dli_from_weather(
         model: Trained two-stage light model
         forecasts: List of daily weather forecasts
         at_plant_level: Predict at the plant-level (under-lamp) position
+        attenuation: The canopy/roof ratio to carry it down by — one number,
+            or one per date (see ``red.lamp.attenuation_by_date``). A date
+            without one, or ``None``, uses the model's fitted ratio.
 
     Passes the features stage 1 was *fitted* on. Earlier this handed
     ``total_radiation`` — summed **shortwave**, i.e. direct + diffuse — to the
@@ -95,9 +101,18 @@ def predict_natural_dli_from_weather(
             day_of_year=f.date.timetuple().tm_yday,
             shortwave_sum=f.total_radiation,
             at_plant_level=at_plant_level,
+            attenuation=_ratio_for(attenuation, f.date),
         )
         for f in forecasts
     }
+
+
+def _ratio_for(attenuation: float | Mapping[date, float] | None, day: date) -> float | None:
+    """The ratio to use on ``day``; ``None`` (fitted fallback) when there is none."""
+    if attenuation is None or isinstance(attenuation, int | float):
+        return attenuation
+    value = attenuation.get(day)
+    return None if value is None or math.isnan(value) else float(value)
 
 
 def distribute_dli_across_hours(

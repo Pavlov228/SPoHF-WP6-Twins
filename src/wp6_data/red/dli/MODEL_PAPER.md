@@ -1,5 +1,10 @@
 # Two-Stage Light Prediction Model for Greenhouse DLI Forecasting
 
+> **Superseded in part by v11 (§5.7).** The s1000 outdoor-lux stage is gone: the
+> model is now OpenMeteo → above-lamp PAR (one Ridge fit) × a *measured, rolling*
+> canopy/roof ratio, with the lamps from LetsGrow. §3's two-regression chain and
+> its constant attenuation describe v7–v10.
+
 ## Abstract
 
 This paper presents a two-stage machine learning model (v7) for predicting Daily Light Integral (DLI) inside a greenhouse using publicly available weather forecast data. The model predicts above-lamp PAR via two Ridge regression stages, then applies a constant attenuation factor to estimate plant-level light. By decomposing the problem into interpretable stages — weather calibration, greenhouse transmission, and internal attenuation — we achieve robust predictions despite limited training data. We document the sensor investigation that led to the current architecture, including failed approaches (direct s2100-02 training, polynomial features) and the key insight that training on the above-lamp sensor with post-hoc attenuation outperforms training on the plant-level sensor directly.
@@ -322,6 +327,40 @@ Stage 2 keeps its day-of-year term — the one place a seasonal feature earns it
 place, standing in for the angle sunlight strikes the glass at. Dropping it, and
 swapping it for a clear-sky index, each made the *chain* worse even where they
 improved the stage in isolation.
+
+### 5.7 One fit instead of the chain, and a moving ratio (v11 — measured)
+
+Measured over the 339 days with a canopy sensor (Oct 2025 – Nov 2026), out of
+fold, with the lamps as LetsGrow ran them. Daily total-DLI MAE:
+
+| model | MAE (mol/m²/day) | worst monthly bias |
+|---|---|---|
+| v10: OpenMeteo → s1000 → above-lamp, × 0.642 | 2.88 (in-sample) | +5.4 (Mar) |
+| one fit OpenMeteo → above-lamp, × 0.642 | 2.78 | +5.4 (Mar) |
+| one fit, × trailing 14-day ratio, 3 days old (forecast) | **2.71** | **+1.4** (Feb) |
+| one fit, × centred 14-day ratio (past days) | 2.16 | +1.2 |
+| Ridge on 12 weather features / boosted trees | 2.84 / 3.04 | |
+| measured roof × centred ratio (floor) | 1.35 | |
+
+- **The s1000 stage only passed a prediction through.** No future day has a
+  recorded lux, and the station has no more history than the PAR sensors.
+  Chained fits compound their errors: roof MAE 2.89 direct (out of fold) against
+  3.21 through s1000 (in sample).
+- **Shortwave alone, again.** Adding day-of-year to the single fit scored worse
+  (roof MAE 3.13 vs 2.89), as §5.6 found for stage 1.
+- **The swing was the ratio.** Canopy/roof runs from ~0.4 in February to
+  0.7–0.8 in autumn — the crop growing over the canopy sensor after a
+  rotation, and probably screens. One constant overshoots half the year and
+  undershoots the other. `red.lamp.attenuation_by_date` measures it per day
+  as (canopy − LetsGrow lamps) / roof, median over 14 days; forecasts use the
+  newest, `/dli/performance` the one a forecast would have had (3 days old).
+- **More parameters did not help.** With one year of canopy data a flexible
+  model cannot learn a month it has not seen; the fit takes under two seconds,
+  so hardware was never the limit. Revisit with 2–3 seasons.
+- **Lamp pattern for the forecast:** per-hour median of LetsGrow's last 3
+  complete days (lamp-hours/day MAE 1.40), not the 14-day mean share (1.91),
+  which smeared the moving switch-on time into a ramp. Past hours on the
+  forecast page use the lamps as they ran.
 
 ## 6. Performance
 

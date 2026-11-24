@@ -4,8 +4,7 @@ from wp6_data.red.dli.aggregation import (
     add_day_of_year_features,
     aggregate_to_daily,
     align_daily_dataframes,
-    align_outdoor_to_indoor_daily,
-    align_weather_to_outdoor_daily,
+    align_weather_to_indoor_daily,
     encode_day_of_year,
 )
 from wp6_data.red.dli.calculator import (
@@ -25,7 +24,6 @@ from wp6_data.red.dli.constants import (
     MIN_INDOOR_PAR,
     MIN_INDOOR_PAR_INTEGRAL,
     MIN_OUTDOOR_LUX,
-    MIN_OUTDOOR_LUX_HOURS,
     NATURAL_LIGHT_SENSOR,
     PERFORMANCE_ERROR_HIGH_THRESHOLD_PCT,
     PERFORMANCE_ERROR_WARN_THRESHOLD_PCT,
@@ -64,7 +62,6 @@ __all__ = [
     "MIN_INDOOR_PAR",
     "MIN_INDOOR_PAR_INTEGRAL",
     "MIN_OUTDOOR_LUX",
-    "MIN_OUTDOOR_LUX_HOURS",
     "NATURAL_LIGHT_SENSOR",
     "PERFORMANCE_ERROR_HIGH_THRESHOLD_PCT",
     "PERFORMANCE_ERROR_WARN_THRESHOLD_PCT",
@@ -86,8 +83,7 @@ __all__ = [
     "add_day_of_year_features",
     "aggregate_to_daily",
     "align_daily_dataframes",
-    "align_outdoor_to_indoor_daily",
-    "align_weather_to_outdoor_daily",
+    "align_weather_to_indoor_daily",
     "encode_day_of_year",
     # Schedule functions
     "compute_daily_predicted_dli",

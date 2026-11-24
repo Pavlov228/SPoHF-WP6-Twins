@@ -17,17 +17,16 @@ DEFAULT_PHOTOPERIOD_THRESHOLD = 10.0
 MIN_OUTDOOR_LUX = 1000  # Minimum daily lux sum to treat as valid daylight
 MIN_INDOOR_PAR = 100  # Minimum daily PAR sum to treat as valid indoor signal
 
-# The same two gates for the model's daily aggregates, which are time integrals
-# rather than sums of readings (see calculator.integrate_over_time). Separate
-# constants because the units are different — lux-hours and μmol/m², not counts
-# — and because the two above are still what lamp.py measures a day against.
+# The indoor gate for the model's daily aggregates, which are time integrals
+# rather than sums of readings (see calculator.integrate_over_time). A separate
+# constant because the unit is different — μmol/m², not a count — and because
+# the one above is still what lamp.py measures a day against.
 #
-# Both say "this day saw essentially nothing", in the aggregate's own units.
-# The reading-sum gates they replace could not: a day of genuine daylight
-# sampled half as often fell below them, and a dark day sampled often enough
-# passed. Red's dullest December day integrates to ~108,000 lux-hours and ~1
-# mol/m², so each gate sits about two orders of magnitude below any real day.
-MIN_OUTDOOR_LUX_HOURS = 1_000.0  # lux-hours (mean ~42 lux over a day)
+# It says "this day saw essentially nothing", in the aggregate's own units. The
+# reading-sum gate it replaces could not: a day of genuine daylight sampled half
+# as often fell below it, and a dark day sampled often enough passed. Red's
+# dullest December day integrates to ~1 mol/m², about two orders of magnitude
+# above the gate.
 MIN_INDOOR_PAR_INTEGRAL = 30_000.0  # μmol/m², i.e. a DLI of 0.03
 
 # First date considered valid for training data.

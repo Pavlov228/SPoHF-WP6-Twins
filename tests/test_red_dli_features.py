@@ -1,26 +1,21 @@
-"""Stage 1 carries no seasonal feature, and serving supplies what it was fitted on.
+"""The weather fit carries no seasonal feature, and serving supplies what it was fitted on.
 
-Stage 1 maps a modelled sky onto a lux sensor standing in the open. Its
-radiation input already *is* the season, so a calendar feature beside it gives
-ridge two collinear ways to say "it is June"; weight spreads across both and the
-radiation coefficient is left too small to tell a bright June day from a dull
-one. Measured end to end, out of fold, across 4-10 fold counts:
+The fit maps a modelled sky onto the sensor above the lamps. Its radiation input
+already *is* the season, so a calendar feature beside it gives ridge two
+collinear ways to say "it is June"; weight spreads across both and the radiation
+coefficient is left too small to tell a bright June day from a dull one.
 
-    stage 1 features                       chain skill vs persistence (mean)
-    shortwave alone                        +0.239
-    direct + diffuse + cloud               +0.232
-    clear-sky index + envelope + cloud     +0.124
-    direct + diffuse + cloud + day-of-year +0.069   (the old set)
-
-Every seasonal variant lost, including an *exact* top-of-atmosphere envelope —
-so this is not about the harmonic being a crude approximation.
+Measured for the old outdoor-lux stage (skill vs persistence, out of fold):
+shortwave alone +0.239, with day-of-year +0.069. And again for the single fit
+that replaced the chain, out of fold over Nov 2025 – Nov 2026: roof MAE 2.89
+with shortwave alone, 3.13 with the day-of-year pair added (MODEL_PAPER §5.7).
 """
 
 from datetime import UTC, date, datetime
 
 import pytest
 
-from wp6_data.red.dli.model import STAGE1_FEATURES, STAGE2_FEATURES
+from wp6_data.red.dli.model import FEATURES
 from wp6_data.red.dli.schedule import predict_natural_dli_from_weather
 from wp6_data.shared.weather import DailyForecast, HourlyWeather
 
@@ -51,16 +46,12 @@ class _Recording:
         return 1.0
 
 
-class TestFittedFeatureSets:
-    def test_stage_1_carries_no_seasonal_feature(self):
-        assert not set(STAGE1_FEATURES) & set(SEASONAL)
+class TestFittedFeatureSet:
+    def test_it_carries_no_seasonal_feature(self):
+        assert not set(FEATURES) & set(SEASONAL)
 
-    def test_stage_1_is_global_irradiance_alone(self):
-        assert STAGE1_FEATURES == ("shortwave_sum",)
-
-    def test_stage_2_keeps_its_day_of_year_term(self):
-        """The one place a seasonal feature earned its place: angle onto glass."""
-        assert set(STAGE2_FEATURES) & {"day_of_year_sin", "day_of_year_cos"}
+    def test_it_is_global_irradiance_alone(self):
+        assert FEATURES == ("shortwave_sum",)
 
 
 class TestServingSuppliesTheFittedFeature:

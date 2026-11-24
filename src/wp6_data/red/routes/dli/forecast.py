@@ -24,7 +24,13 @@ from wp6_data.red.dli import (
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, derive_lamp_model
+from wp6_data.red.lamp import (
+    FORECAST_RATIO_LAG_DAYS,
+    RECENT_DAYS,
+    attenuation_by_date,
+    derive_lamp_model,
+    observed_lamp_par,
+)
 from wp6_data.shared import make_schedule_chart, render_page, render_stat_grid, utc_day_bounds
 from wp6_data.shared.time import display_tz
 
@@ -61,47 +67,84 @@ async def dli_forecast(
     client = deps.get_weather_client()
     model = await get_model()
 
-    # Read the lamps off the two PAR sensors over the recent window. Lamp light
-    # is measured during hours the above-lamp sensor sees no daylight, so a
-    # greenhouse that is not lighting yields a lamp model that adds nothing and
-    # predicted DLI falls back to the natural prediction.
+    # Lamps and the canopy/roof ratio, for every day on the chart.
     #
-    # Only the *schedule* comes from this fortnight. Attenuation comes from the
-    # trained model, which fitted it over its whole training window: a fortnight
-    # of winter has no lamp-free daylight to measure it from, and trying gives a
-    # ratio above 1 — more light at the canopy than at the roof.
-    lamp_window_start, _ = utc_day_bounds(today - timedelta(days=RECENT_DAYS))
+    # Days that have happened take the lamps *as they ran* — LetsGrow's switch,
+    # or the PAR sensors after its last delivery — exactly as /dli/performance
+    # does. Only hours that have not happened yet take the recent pattern. One
+    # pattern for the whole range drew November's lamps onto a summer week.
+    #
+    # The ratio carries the natural prediction from the roof down to the canopy.
+    # It moves over the year (~0.4 to ~0.8), so each day takes the one a
+    # forecast would have known for it; today and later take the latest measured
+    # one. The model's fitted ratio is only the fallback.
+    recent_start = today - timedelta(days=RECENT_DAYS)
+    history_start, _ = utc_day_bounds(
+        min(start_date, recent_start)
+        - timedelta(days=RECENT_DAYS + FORECAST_RATIO_LAG_DAYS)
+    )
+    lamp_window_start, _ = utc_day_bounds(recent_start)
     _, lamp_window_end = utc_day_bounds(today)
 
     try:
-        lamp_par_df = await dli_data.get_par_readings(
+        history_df = await dli_data.get_par_readings(
             device_ids=[NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR],
-            start=lamp_window_start,
+            start=history_start,
             end=lamp_window_end,
         )
     except Exception as e:
         return render_page(PAGE_TITLE, f"<h1>Error: {e}</h1>",
                           show_back_link=True, back_url="/dli")
 
-    # The pattern comes from LetsGrow where it has delivered: it switched the
-    # lamps, so its fortnight says how often each hour was lit — including the
-    # bright middays the PAR sensors cannot see a lamp in. Unreachable, it falls
-    # back to the sensors, and the note below says which was used.
+    # LetsGrow switched the lamps, so where it has delivered it says when they
+    # ran — including the bright middays the PAR sensors cannot see a lamp in.
+    # Unreachable, it falls back to the sensors, and the note says which.
     try:
-        on_fraction = await dli_data.get_lamp_on_fraction(lamp_window_start, lamp_window_end)
+        on_fraction = await dli_data.get_lamp_on_fraction(history_start, lamp_window_end)
     except Exception as e:  # noqa: BLE001 - LetsGrow down degrades to the PAR sensors
         log.warning("lamp_status_unavailable", error=str(e))
         on_fraction = None
+    on_fraction_or_empty = on_fraction if on_fraction is not None else pd.Series(dtype=float)
+
+    above_hist = history_df[history_df["device"] == NATURAL_LIGHT_SENSOR]
+    canopy_hist = history_df[history_df["device"] == TOTAL_LIGHT_SENSOR]
 
     lamp = None
-    if not lamp_par_df.empty:
+    observed_lamps = pd.Series(dtype=float)
+    ratio_by_day: dict[date, float] = {}
+    recent_ratio: float | None = None
+    if not history_df.empty:
+        recent = history_df[pd.to_datetime(history_df["time"], utc=True) >= lamp_window_start]
         lamp = derive_lamp_model(
-            lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
-            lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
+            recent[recent["device"] == NATURAL_LIGHT_SENSOR],
+            recent[recent["device"] == TOTAL_LIGHT_SENSOR],
             attenuation=model.attenuation_factor if model.is_trained() else None,
-            on_fraction=on_fraction,
+            on_fraction=(
+                on_fraction[on_fraction.index >= lamp_window_start]
+                if on_fraction is not None else None
+            ),
         )
+        observed_lamps, _ = observed_lamp_par(above_hist, canopy_hist, on_fraction_or_empty)
+        ratio_by_day = attenuation_by_date(
+            above_hist, canopy_hist, on_fraction_or_empty,
+            lag_days=FORECAST_RATIO_LAG_DAYS,
+        ).dropna().to_dict()
+        latest = attenuation_by_date(above_hist, canopy_hist, on_fraction_or_empty).dropna()
+        if not latest.empty:
+            recent_ratio = float(latest.iloc[-1])
     lamp_schedule = lamp_hourly_par(lamp)
+
+    def lamp_par_at(moment: datetime) -> float:
+        """The lamps as they ran where that hour has been measured, else the pattern."""
+        hour = pd.Timestamp(moment).tz_convert("UTC").floor("h")
+        if hour in observed_lamps.index:
+            return float(observed_lamps[hour])
+        return lamp_schedule.get(moment.hour, 0.0)
+
+    def ratio_for(day: date) -> float | None:
+        if day in ratio_by_day:
+            return ratio_by_day[day]
+        return recent_ratio if day >= today - timedelta(days=FORECAST_RATIO_LAG_DAYS) else None
 
     # Get data for selected date range
     range_start, _ = utc_day_bounds(start_date)
@@ -127,7 +170,10 @@ async def dli_forecast(
     if model.is_trained():
         try:
             forecasts = await fetch_weather_for_range(client, start_date, end_date)
-            daily_natural_dli = predict_natural_dli_from_weather(model, forecasts)
+            daily_natural_dli = predict_natural_dli_from_weather(
+                model, forecasts,
+                attenuation={f.date: r for f in forecasts if (r := ratio_for(f.date))},
+            )
 
             predicted_records = []
             natural_records = []
@@ -144,7 +190,7 @@ async def dli_forecast(
                     natural_records.append({"datetime": h.datetime, "par": natural_par})
 
                     # Predicted PAR = natural + whatever the lamps actually run at
-                    predicted_par = natural_par + lamp_schedule.get(h.datetime.hour, 0.0)
+                    predicted_par = natural_par + lamp_par_at(h.datetime)
                     predicted_records.append({"datetime": h.datetime, "par": predicted_par})
 
             if predicted_records:
@@ -222,7 +268,9 @@ async def dli_forecast(
                 card_forecasts = await client.get_forecast(days=7)
                 card_fc = [f for f in card_forecasts if f.date in missing_card_dates]
                 if card_fc:
-                    nat_map = predict_natural_dli_from_weather(model, card_fc)
+                    nat_map = predict_natural_dli_from_weather(
+                        model, card_fc, attenuation=recent_ratio
+                    )
                     pred_map = compute_daily_predicted_dli(card_fc, nat_map, lamp)
                     for f in card_fc:
                         daily_dli.setdefault(f.date, {})["predicted"] = pred_map[f.date]
@@ -252,6 +300,8 @@ async def dli_forecast(
         predicted_df=predicted_df,
         natural_df=natural_df,
         title=title,
+        supplement_label="Lamps (predicted)",
+        hourly_steps=True,
     )
 
     # Add daily DLI annotations at noon of each day (at bottom to avoid legend)
@@ -285,9 +335,10 @@ async def dli_forecast(
     # thing no weather data would catch, so the reader is told what was assumed.
     if lamp is not None and lamp.is_lighting:
         lamp_note = (
-            f"Total predicted = natural + the lamps' recent pattern, {lamp.describe()} "
-            f"(per {lamp.schedule_source}, last {lamp.observed_days} days; assumes "
-            "that pattern continues)."
+            "Total predicted = natural + the lamps: as they ran for hours already "
+            "measured, and for hours ahead their recent pattern, "
+            f"{lamp.describe()} (per {lamp.schedule_source}, last "
+            f"{lamp.observed_days} days; assumes that pattern continues)."
         )
     elif lamp is not None:
         lamp_note = (
@@ -305,6 +356,16 @@ async def dli_forecast(
             " <strong>Canopy scaling unknown</strong> — no lamp-free daylight in "
             "this window to measure it from, so natural light is shown at "
             "roof level."
+        )
+
+    if model.is_trained():
+        lamp_note += (
+            f" Natural light is carried to the canopy at {recent_ratio:.2f} of the "
+            f"roof's, the ratio measured over the last {RECENT_DAYS} days."
+            if recent_ratio is not None else
+            f" Natural light is carried to the canopy at {model.attenuation_factor:.2f} "
+            "of the roof's, the model's fitted ratio — too few recent days to "
+            "measure one."
         )
 
     unit = '<span class="unit">mol/m²</span>'

@@ -9,6 +9,7 @@ underprediction of the entire attenuation factor — around 38% — because the 
 sides of the comparison were different physical quantities.
 """
 
+import math
 from datetime import UTC, date, datetime
 
 import pytest
@@ -27,7 +28,7 @@ ABOVE_LAMP_PAR_SUM = 100_000_000.0
 
 
 class _Stage:
-    """A fitted stage that always predicts the same value."""
+    """A fitted regression that always predicts the same value."""
 
     def __init__(self, value: float):
         self.value = value
@@ -37,22 +38,17 @@ class _Stage:
 
 
 def _model() -> TwoStageLightModel:
-    """A trained-looking model whose stage 2 emits a known above-lamp PAR sum."""
+    """A trained-looking model whose weather fit emits a known above-lamp PAR sum."""
     model = TwoStageLightModel()
-    model.stage1_features = ["shortwave_sum"]
-    model.stage2_features = ["lux_hours"]
-    model.stage1_model = _Stage(5000.0)
-    model.stage2_model = _Stage(ABOVE_LAMP_PAR_SUM)
-    model.stage1_scaler = None
-    model.stage2_scaler = None
-    model.stage1_poly = None
-    model.stage2_poly = None
+    model.features = ["shortwave_sum"]
+    model.weather_model = _Stage(ABOVE_LAMP_PAR_SUM)
+    model.weather_scaler = None
     model.attenuation_factor = ATTENUATION
     return model
 
 
 def _forecast(day: date) -> DailyForecast:
-    """A day carrying enough weather for stage 1's fitted features."""
+    """A day carrying enough weather for the model's fitted features."""
     return DailyForecast(
         date=day,
         hourly=[
@@ -117,3 +113,45 @@ class TestScheduleHelperPassesThePositionThrough:
         assert predict_natural_dli_from_weather(model, forecasts) == (
             predict_natural_dli_from_weather(model, forecasts, at_plant_level=True)
         )
+
+
+class TestAMeasuredRatioReplacesTheFittedOne:
+    """The real ratio moves over the year; the fitted one is only the fallback."""
+
+    MEASURED = 0.45
+
+    def test_a_single_ratio_applies_to_every_day(self):
+        model = _model()
+        days = [date(2026, 3, 1), date(2026, 3, 2)]
+
+        above = predict_natural_dli_from_weather(
+            model, [_forecast(d) for d in days], at_plant_level=False,
+        )
+        plant = predict_natural_dli_from_weather(
+            model, [_forecast(d) for d in days], attenuation=self.MEASURED,
+        )
+
+        for day in days:
+            assert plant[day] / above[day] == pytest.approx(self.MEASURED)
+
+    def test_a_day_without_a_measured_ratio_falls_back_to_the_fitted_one(self):
+        model = _model()
+        measured, missing, unknown = date(2026, 3, 1), date(2026, 3, 2), date(2026, 3, 3)
+        forecasts = [_forecast(d) for d in (measured, missing, unknown)]
+
+        above = predict_natural_dli_from_weather(model, forecasts, at_plant_level=False)
+        plant = predict_natural_dli_from_weather(
+            model, forecasts, attenuation={measured: self.MEASURED, unknown: math.nan},
+        )
+
+        assert plant[measured] / above[measured] == pytest.approx(self.MEASURED)
+        assert plant[missing] / above[missing] == pytest.approx(ATTENUATION)
+        assert plant[unknown] / above[unknown] == pytest.approx(ATTENUATION)
+
+    def test_the_ratio_does_not_touch_the_above_lamp_position(self):
+        model = _model()
+        forecasts = [_forecast(date(2026, 3, 1))]
+
+        assert predict_natural_dli_from_weather(
+            model, forecasts, at_plant_level=False, attenuation=self.MEASURED,
+        ) == predict_natural_dli_from_weather(model, forecasts, at_plant_level=False)

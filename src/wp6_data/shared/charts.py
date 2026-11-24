@@ -273,6 +273,8 @@ def make_schedule_chart(
     natural_df: pd.DataFrame | None = None,
     title: str = "Light Schedule",
     y_label: str = "PAR (μmol/m²/s)",
+    supplement_label: str | None = None,
+    hourly_steps: bool = False,
 ) -> go.Figure:
     """Create an overlay chart showing actual and predicted PAR.
 
@@ -282,14 +284,64 @@ def make_schedule_chart(
         natural_df: DataFrame with columns: datetime, par (predicted natural light)
         title: Chart title
         y_label: Y-axis label
+        supplement_label: When set, the gap between predicted natural light and
+            the predicted total is drawn as its own band under this name — the
+            light that is not the sun — at the bottom, with natural light stacked
+            on top. Needs both frames, on the same timestamps.
+        hourly_steps: Draw the predicted series as steps, one value held across
+            each interval, instead of joining the points with slopes. For
+            predictions made per hour: a light switched on at once otherwise
+            reads as ramping up over the hour.
 
     Returns:
         Plotly Figure object
     """
     fig = go.Figure()
+    shape = "hv" if hourly_steps else "linear"
+
+    stacked = (
+        supplement_label
+        and natural_df is not None and not natural_df.empty
+        and predicted_df is not None and not predicted_df.empty
+    )
+    if stacked:
+        # The supplement at the bottom, natural light stacked on top of it: the
+        # supplement is the steady block an operator switches, and the sun is
+        # what varies on top. Each band hovers its own amount, not the running
+        # total — that is what the predicted line is for.
+        both = natural_df[["datetime", "par"]].merge(
+            predicted_df[["datetime", "par"]], on="datetime", suffixes=("_natural", "_total"),
+        )
+        supplement = (both["par_total"] - both["par_natural"]).clip(lower=0)
+        fig.add_trace(
+            go.Scatter(
+                x=both["datetime"],
+                y=supplement,
+                name=supplement_label,
+                mode="lines",
+                fill="tozeroy",
+                fillcolor="rgba(245, 158, 11, 0.45)",
+                line={"width": 0, "shape": shape},
+                customdata=supplement,
+                hovertemplate="%{customdata:.0f}",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=both["datetime"],
+                y=supplement + both["par_natural"],
+                name="Natural (predicted)",
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(251, 188, 4, 0.2)",
+                line={"color": "rgb(251, 188, 4)", "width": 1, "dash": "dot", "shape": shape},
+                customdata=both["par_natural"],
+                hovertemplate="%{customdata:.0f}",
+            )
+        )
 
     # Predicted natural light - filled area (yellow)
-    if natural_df is not None and not natural_df.empty:
+    elif natural_df is not None and not natural_df.empty:
         fig.add_trace(
             go.Scatter(
                 x=natural_df["datetime"],
@@ -298,7 +350,7 @@ def make_schedule_chart(
                 mode="lines",
                 fill="tozeroy",
                 fillcolor="rgba(251, 188, 4, 0.2)",
-                line={"color": "rgb(251, 188, 4)", "width": 1, "dash": "dot"},
+                line={"color": "rgb(251, 188, 4)", "width": 1, "dash": "dot", "shape": shape},
             )
         )
 
@@ -310,7 +362,7 @@ def make_schedule_chart(
                 y=predicted_df["par"],
                 name="Predicted",
                 mode="lines",
-                line={"color": "rgb(234, 67, 53)", "width": 2, "dash": "dash"},
+                line={"color": "rgb(234, 67, 53)", "width": 2, "dash": "dash", "shape": shape},
             )
         )
 

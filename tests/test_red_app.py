@@ -366,7 +366,7 @@ async def test_a_dli_fit_during_an_outage_is_held_not_lost(tmp_path, monkeypatch
     model = await dli_model.get_model()
     assert not model.is_trained()
 
-    model.stage1_model, model.stage2_model = "m1", "m2"  # stands in for train()
+    model.weather_model = "m"  # stands in for train()
     await model.save()
 
     assert await dli_model.get_model() is model

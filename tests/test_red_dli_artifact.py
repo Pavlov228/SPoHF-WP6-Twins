@@ -20,11 +20,8 @@ KEY = "light_model.pkl"
 def _artifact(**overrides) -> dict:
     """A well-formed artifact of the current era."""
     data = {
-        "stage1_model": "m1", "stage2_model": "m2",
-        "stage1_poly": None, "stage2_poly": None,
-        "stage1_scaler": None, "stage2_scaler": None,
-        "stage1_features": ["direct_radiation_sum"],
-        "stage2_features": ["lux_sum"],
+        "weather_model": "m", "weather_scaler": None,
+        "features": ["shortwave_sum"],
         "stats": "stats", "attenuation_factor": 0.62,
         "version": MODEL_VERSION, "fingerprint": fit_fingerprint(),
     }
@@ -79,10 +76,10 @@ class TestLoad:
         assert await TwoStageLightModel().load(store, KEY) is None
 
     async def test_a_missing_key_is_refused_rather_than_defaulted(self, tmp_path):
-        """The old code filled `stage1_features` with a guess. A guessed feature
-        list is indistinguishable from a fitted one once it is in memory."""
+        """Older code filled a missing feature list with a guess. A guessed
+        feature list is indistinguishable from a fitted one once it is in memory."""
         data = _artifact()
-        del data["stage1_features"]
+        del data["features"]
         store = await _write(tmp_path, data)
 
         assert await TwoStageLightModel().load(store, KEY) is None

@@ -60,6 +60,17 @@ LAMP_THRESHOLD = 50.0
 # How far back the schedule is read, and how often an hour must have been lit
 # across that window to be carried forward.
 RECENT_DAYS = 14
+
+# Days of LetsGrow the forecast's on/off pattern is read from. Measured over
+# 205 autumn-winter days, predicting each day from days at least three old (the
+# LetsGrow lag): lamp-hours/day MAE 1.91 from the 14-day mean share, 1.40 from
+# the median of the last 3 days, 1.29 from the last day alone. Three rather than
+# one so a single odd day — a fault, a manual override — cannot set tomorrow.
+LAMP_PATTERN_DAYS = 3
+
+# Hours a LetsGrow day must report to count as a whole day. Its newest day is
+# usually cut off mid-delivery, and an unreported hour is not a dark one.
+COMPLETE_DAY_HOURS = 22
 HOUR_ON_SHARE = 0.5
 
 # Days either side of a date whose residuals decide whether that date's daylight
@@ -276,9 +287,17 @@ def _from_letsgrow(
     """
     last = on_fraction.index.max()
     recent = on_fraction[on_fraction.index > last - pd.Timedelta(days=recent_days)]
-    days = int(recent.index.normalize().nunique())
 
-    share = recent.groupby(recent.index.hour).mean().reindex(range(24), fill_value=0.0)
+    # The pattern is the per-hour median of the newest complete days only. The
+    # switch-on time moves through the season — 02:35 to 00:00 UTC over Oct-Nov
+    # 2026 — so a fortnight's mean gives the edge hours a part-share and draws a
+    # ramp where the lamps really switch at once. A median of on/off days keeps
+    # the edge sharp, and a part-lit hour stays part-lit.
+    by_day = recent.groupby([recent.index.normalize(), recent.index.hour]).mean().unstack()
+    complete = by_day[by_day.notna().sum(axis=1) >= COMPLETE_DAY_HOURS]
+    pattern = (complete if not complete.empty else by_day).tail(LAMP_PATTERN_DAYS)
+    days = len(pattern)
+    share = pattern.median().reindex(range(24)).fillna(0.0)
     if not (share > 0).any():
         return LampModel(
             attenuation, attenuation_days, None, frozenset(), days,
@@ -854,6 +873,82 @@ def lamp_level_by_date(
     hours = pd.concat([_hourly(above_lamp_df), _hourly(canopy_df)]).index
     days = pd.date_range(hours.min().normalize(), hours.max().normalize(), freq="D")
     rolled = rolled.reindex(days.union(rolled.index)).ffill().bfill().reindex(days)
+    rolled.index = rolled.index.date
+    return rolled
+
+
+# How old the newest day in a forecast's ratio window is. A forecast issued today
+# for tomorrow has nothing from today yet, and LetsGrow — which separates lamp
+# light from daylight — lands about two days late. Scoring a past day "as the
+# forecast would have seen it" has to leave the same days out.
+FORECAST_RATIO_LAG_DAYS = 3
+
+# Days a ratio window must hold before it says anything. Single days scatter
+# (a dull winter day's ratio is mostly the lamp estimate's error), so a window of
+# one or two would hand that scatter straight to the prediction.
+MIN_RATIO_DAYS = 5
+
+
+def attenuation_by_date(
+    above_lamp_df: pd.DataFrame,
+    canopy_df: pd.DataFrame,
+    on_fraction: pd.Series,
+    *,
+    window_days: int = RECENT_DAYS,
+    centred: bool = False,
+    lag_days: int = 0,
+) -> pd.Series:
+    """The canopy/roof ratio of natural light, per date, over a rolling window.
+
+    Per day: ``(canopy − lamp) / above`` on daily sums, the lamp being what
+    :func:`observed_lamp_par` says ran — LetsGrow's switch at the measured
+    level. Then the median over ``window_days``.
+
+    Rolling rather than the model's one fitted number because the ratio moves:
+    over Oct 2025 – Nov 2026 it ran from about 0.4 in February to 0.7-0.8 in
+    autumn — the crop growing over the canopy sensor after each rotation, and
+    probably screens. One constant overshoots one half of the year and
+    undershoots the other.
+
+    ``centred`` looks both ways, for scoring a day that has happened.
+    ``lag_days`` keeps the newest that many days out of each window, so a past
+    day can be scored with only what a forecast would have had (see
+    :data:`FORECAST_RATIO_LAG_DAYS`).
+
+    Indexed by ``date``. Days the window has nothing for are NaN rather than
+    filled: the caller falls back to the model's fitted ``attenuation_factor``,
+    which is a better guess than a ratio carried across a gap.
+    """
+    above = _hourly(above_lamp_df)
+    canopy = _hourly(canopy_df)
+    if above.empty or canopy.empty:
+        return pd.Series(dtype=float)
+    lamp, _ = observed_lamp_par(above_lamp_df, canopy_df, on_fraction)
+    joined = pd.concat(
+        [above.rename("above"), canopy.rename("canopy"), lamp.rename("lamp")], axis=1,
+    ).dropna(subset=["above", "canopy"])
+    joined["lamp"] = joined["lamp"].fillna(0.0)
+
+    daily = joined.groupby(joined.index.normalize()).sum()
+    daily = daily[daily["above"] > _min_indoor_par()]
+    if daily.empty:
+        return pd.Series(dtype=float)
+    ratio = (daily["canopy"] - daily["lamp"]) / daily["above"]
+    # Natural light cannot grow on its way down, nor go negative: a day outside
+    # that range is a day the lamp estimate was wrong, not a ratio.
+    ratio = ratio[(ratio > 0) & (ratio <= 1)]
+    if ratio.empty:
+        return pd.Series(dtype=float)
+
+    # On a full daily calendar first, so a day without its own measurement still
+    # gets the window around it; shifted by the lag, so day d sees only days up
+    # to d − lag_days.
+    ratio.index = ratio.index + pd.Timedelta(days=lag_days)
+    days = pd.date_range(ratio.index.min() - pd.Timedelta(days=lag_days),
+                         ratio.index.max(), freq="D")
+    rolled = ratio.reindex(days).rolling(
+        window_days, center=centred, min_periods=MIN_RATIO_DAYS,
+    ).median()
     rolled.index = rolled.index.date
     return rolled
 

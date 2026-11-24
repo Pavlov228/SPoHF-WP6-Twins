@@ -32,7 +32,7 @@ DAYLIGHT_HOURS = range(6, 19)
 
 
 class _Stage:
-    """A fitted stage that always predicts the same value."""
+    """A fitted regression that always predicts the same value."""
 
     def __init__(self, value: float):
         self.value = value
@@ -45,12 +45,9 @@ async def _model() -> TwoStageLightModel:
     """Stands in for `get_model`, which is async now that the artifact is read
     from the object store rather than a mounted volume."""
     model = TwoStageLightModel()
-    model.stage1_features = ["shortwave_sum"]
-    model.stage2_features = ["lux_hours"]
-    model.stage1_model = _Stage(5000.0)
-    model.stage2_model = _Stage(100_000.0)
-    model.stage1_scaler = model.stage2_scaler = None
-    model.stage1_poly = model.stage2_poly = None
+    model.features = ["shortwave_sum"]
+    model.weather_model = _Stage(100_000.0)
+    model.weather_scaler = None
     return model
 
 

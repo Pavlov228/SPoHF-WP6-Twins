@@ -82,12 +82,10 @@ class TestServedFeatures:
 class TestMissingFeaturesAreRefused:
     def _trained(self):
         model = TwoStageLightModel()
-        model.stage1_features = [
+        model.features = [
             "direct_radiation_sum", "diffuse_radiation_sum", "cloud_cover_avg",
         ]
-        model.stage2_features = ["lux_hours"]
-        model.stage1_model = object()
-        model.stage2_model = object()
+        model.weather_model = object()
         return model
 
     def test_a_fitted_feature_left_out_raises(self):
@@ -110,16 +108,13 @@ class TestMissingFeaturesAreRefused:
     def test_a_feature_the_model_was_not_fitted_on_is_not_required(self):
         """Older models trained on radiation alone must still predict."""
         model = self._trained()
-        model.stage1_features = ["direct_radiation_sum"]
-        model.stage1_scaler = None
-        model.stage1_poly = None
+        model.features = ["direct_radiation_sum"]
+        model.weather_scaler = None
 
-        class _Stage:
+        class _Fit:
             def predict(self, _x):
                 return [1000.0]
 
-        model.stage1_model = _Stage()
-        model.stage2_model = _Stage()
-        model.stage2_features = ["lux_hours"]
+        model.weather_model = _Fit()
 
         assert model.predict_daily(100.0) >= 0.0

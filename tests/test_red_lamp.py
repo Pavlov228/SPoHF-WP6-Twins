@@ -15,13 +15,17 @@ import pytest
 from wp6_data.red.dli.constants import SECONDS_PER_HOUR, UMOL_TO_MOL
 from wp6_data.red.lamp import (
     DAYLIGHT_THRESHOLD,
+    FORECAST_RATIO_LAG_DAYS,
     LAMP_FULL_ON,
+    LAMP_PATTERN_DAYS,
     LAMP_SOURCE_LETSGROW,
     LAMP_SOURCE_SENSORS,
     LAMP_THRESHOLD,
+    MIN_RATIO_DAYS,
     RECENT_DAYS,
     LampModel,
     LampState,
+    attenuation_by_date,
     compute_attenuation,
     derive_lamp_model,
     lamp_level_by_date,
@@ -359,7 +363,7 @@ def _fraction(index, share):
                      index=index, dtype=float)
 
 
-def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01"):
+def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01", attenuation=_ATTENUATION):
     """Roof and canopy PAR plus LetsGrow, for lamps on at ``lit_hours`` every day.
 
     The daylight peak is bright enough that a lamp at ``lamp_level`` cannot lift
@@ -370,7 +374,8 @@ def _greenhouse(days, lamp_level, lit_hours, start="2025-12-01"):
     natural = np.clip(1200 * np.sin(np.pi * (hour - 8) / 8), 0, None)
     lit = np.isin(hour, list(lit_hours))
     level = np.broadcast_to(np.asarray(lamp_level, dtype=float), len(index))
-    canopy = natural * _ATTENUATION + np.where(lit, level, 0.0)
+    ratio = np.broadcast_to(np.asarray(attenuation, dtype=float), len(index))
+    canopy = natural * ratio + np.where(lit, level, 0.0)
     return _series(index, natural), _series(index, canopy), _fraction(index, lit.astype(float))
 
 
@@ -474,7 +479,7 @@ class TestLampStatusConfig:
 
 
 class TestForecastFromLetsGrow:
-    """The forecast's lamp pattern: each hour's share of recent days it was lit."""
+    """The forecast's lamp pattern: each hour as LetsGrow's newest days ran it."""
 
     def _lit_every_other_midday(self, days=RECENT_DAYS):
         """Lamps at night every day, at 12:00 only on alternate (dull) days."""
@@ -483,19 +488,44 @@ class TestForecastFromLetsGrow:
         status[midday] = 1.0
         return natural, canopy, status
 
-    def test_an_hour_lit_on_half_the_days_adds_half_the_lamp(self):
-        natural, canopy, status = self._lit_every_other_midday()
+    def test_a_switch_on_that_moved_earlier_is_followed_at_once(self):
+        """The autumn case: lamps on from 22:00 only for the newest few days.
 
-        lamp = derive_lamp_model(
-            natural, canopy, on_fraction=status,
+        A fortnight's mean gave 22:00 a part-share and drew a ramp into the
+        night; the lamps switch on in one go."""
+        natural, canopy, status = _greenhouse(RECENT_DAYS, 180.0, (23, 0, 1, 2))
+        newest = status.index.normalize() >= status.index.normalize().max() - pd.Timedelta(
+            days=LAMP_PATTERN_DAYS - 1
         )
+        status[newest & (status.index.hour == 22)] = 1.0
 
-        assert lamp.share_at(12) == pytest.approx(0.5, abs=0.1)
-        assert lamp.lamp_par_at(datetime(2026, 1, 1, 12, tzinfo=UTC)) == pytest.approx(
-            180.0 * lamp.share_at(12)
-        )
+        lamp = derive_lamp_model(natural, canopy, on_fraction=status)
+
+        assert lamp.share_at(22) == pytest.approx(1.0)
         assert lamp.share_at(0) == pytest.approx(1.0)
+        assert lamp.share_at(12) == pytest.approx(0.0)
         assert lamp.schedule_source == LAMP_SOURCE_LETSGROW
+
+    def test_one_odd_day_does_not_set_tomorrow(self):
+        natural, canopy, status = _greenhouse(RECENT_DAYS, 180.0, (23, 0, 1, 2))
+        last_day = status.index.normalize() == status.index.normalize().max()
+        status[last_day & (status.index.hour == 12)] = 1.0
+
+        lamp = derive_lamp_model(natural, canopy, on_fraction=status)
+
+        assert lamp.share_at(12) == pytest.approx(0.0)
+
+    def test_a_part_lit_hour_stays_part_lit(self):
+        """Switched on at half past: half the hour's lamp light, every day."""
+        natural, canopy, status = _greenhouse(RECENT_DAYS, 180.0, (23, 0, 1, 2))
+        status[status.index.hour == 3] = 0.5
+
+        lamp = derive_lamp_model(natural, canopy, on_fraction=status)
+
+        assert lamp.share_at(3) == pytest.approx(0.5)
+        assert lamp.lamp_par_at(datetime(2026, 1, 1, 3, tzinfo=UTC)) == pytest.approx(
+            lamp.power_par * 0.5
+        )
 
     def test_the_daily_lamp_light_is_the_expected_hours_times_the_level(self):
         natural, canopy, status = self._lit_every_other_midday()
@@ -538,3 +568,66 @@ class TestForecastFromLetsGrow:
         assert lamp.schedule_source == LAMP_SOURCE_LETSGROW
         assert lamp.power_par == pytest.approx(180.0, abs=1.0)
         assert lamp.share_at(10) == pytest.approx(1.0)
+
+
+class TestAttenuationByDate:
+    """The canopy/roof ratio of natural light, measured as it moves."""
+
+    # Lamps on through the night *and* into the bright morning, so the ratio is
+    # only right if the lamp is taken out of the daylight hours too.
+    LIT = (23, 0, 1, 2, 8, 9, 10)
+
+    def _stepped(self, before, after, days=3 * RECENT_DAYS):
+        """A ratio that steps from ``before`` to ``after`` halfway through."""
+        per_day = np.where(np.arange(days) < days // 2, before, after)
+        natural, canopy, status = _greenhouse(
+            days, 180.0, self.LIT, start="2026-01-01", attenuation=np.repeat(per_day, 24),
+        )
+        dates = pd.date_range("2026-01-01", periods=days, freq="D").date
+        return natural, canopy, status, dates, days // 2
+
+    def test_it_is_the_natural_share_with_the_lamps_taken_out(self):
+        natural, canopy, status = _greenhouse(2 * RECENT_DAYS, 180.0, self.LIT)
+
+        ratio = attenuation_by_date(natural, canopy, status)
+
+        assert ratio.dropna().to_numpy() == pytest.approx(_ATTENUATION, abs=1e-6)
+
+    def test_it_follows_a_step(self):
+        """One fitted number cannot: it averages the two sides into neither."""
+        natural, canopy, status, dates, _ = self._stepped(0.45, 0.75)
+
+        ratio = attenuation_by_date(natural, canopy, status)
+
+        assert ratio[dates[RECENT_DAYS]] == pytest.approx(0.45, abs=1e-6)
+        assert ratio[dates[-1]] == pytest.approx(0.75, abs=1e-6)
+
+    def test_centred_catches_a_step_a_trailing_window_still_lags(self):
+        natural, canopy, status, dates, step = self._stepped(0.45, 0.75)
+        soon_after = dates[step + 3]
+
+        trailing = attenuation_by_date(natural, canopy, status)
+        centred = attenuation_by_date(natural, canopy, status, centred=True)
+
+        assert trailing[soon_after] == pytest.approx(0.45, abs=1e-6)
+        assert centred[soon_after] == pytest.approx(0.75, abs=1e-6)
+
+    def test_the_lag_leaves_the_newest_days_out(self):
+        """What a forecast had: nothing from the last few days."""
+        natural, canopy, status, dates, step = self._stepped(0.45, 0.75)
+
+        now = attenuation_by_date(natural, canopy, status)
+        lagged = attenuation_by_date(
+            natural, canopy, status, lag_days=FORECAST_RATIO_LAG_DAYS,
+        )
+
+        day = dates[step + RECENT_DAYS // 2]
+        earlier = dates[step + RECENT_DAYS // 2 - FORECAST_RATIO_LAG_DAYS]
+        assert lagged[day] == pytest.approx(now[earlier])
+
+    def test_too_few_days_say_nothing_rather_than_something_noisy(self):
+        """The caller then falls back to the model's fitted ratio."""
+        natural, canopy, status = _greenhouse(MIN_RATIO_DAYS - 1, 180.0, self.LIT)
+
+        assert attenuation_by_date(natural, canopy, status).isna().all()
+

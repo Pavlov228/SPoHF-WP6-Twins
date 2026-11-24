@@ -32,7 +32,12 @@ from wp6_data.red.dli import (
     predict_natural_dli_from_weather,
 )
 from wp6_data.red.dli import data as dli_data
-from wp6_data.red.lamp import RECENT_DAYS, observed_lamp_par
+from wp6_data.red.lamp import (
+    FORECAST_RATIO_LAG_DAYS,
+    RECENT_DAYS,
+    attenuation_by_date,
+    observed_lamp_par,
+)
 from wp6_data.shared import (
     pill_row,
     render_date_filter,
@@ -113,7 +118,10 @@ def _lamp_note(covered_until, end: date, unavailable: bool) -> str:
     return (
         "<p class=\"note\">Predicted total = predicted natural light + the lamps "
         f"<strong>as they actually ran</strong>, per LetsGrow.{tail} So this scores "
-        "the natural-light model; the lamp schedule is not being forecast here.</p>"
+        "the natural-light model; the lamp schedule is not being forecast here. "
+        "Natural light reaches the canopy at the canopy/roof ratio a forecast would "
+        f"have had: the {RECENT_DAYS} days ending {FORECAST_RATIO_LAG_DAYS} days "
+        "before each day.</p>"
     )
 
 
@@ -183,11 +191,19 @@ async def dli_performance(
     # and applied it to all of it, which in autumn left the lamps' growing share
     # of the day out — a steady ~3 mol/m²/day short over Oct-Nov 2026.
     #
-    # The window starts a fortnight early so the first days have a level.
+    # The natural half is carried down to the canopy by the canopy/roof ratio
+    # *as a forecast would have known it*: the fortnight ending
+    # FORECAST_RATIO_LAG_DAYS before each day. A ratio from around the day itself
+    # would score better and mean less — it is not something a forecast has.
+    #
+    # The window starts early enough that the first days have a level and a ratio.
     lamp_dli: dict[date, float] = {}
+    ratio_by_day: dict[date, float] | None = None
     lamp_note = ""
     if is_total:
-        lamp_window_start, _ = utc_day_bounds(start - timedelta(days=RECENT_DAYS))
+        lamp_window_start, _ = utc_day_bounds(
+            start - timedelta(days=RECENT_DAYS + FORECAST_RATIO_LAG_DAYS)
+        )
         try:
             lamp_par_df = await dli_data.get_par_readings(
                 device_ids=[NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR],
@@ -206,6 +222,12 @@ async def dli_performance(
             on_fraction if on_fraction is not None else pd.Series(dtype=float),
         )
         lamp_dli = daily_lamp_dli(lamp_par)
+        ratio_by_day = attenuation_by_date(
+            lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
+            lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
+            on_fraction if on_fraction is not None else pd.Series(dtype=float),
+            lag_days=FORECAST_RATIO_LAG_DAYS,
+        ).dropna().to_dict()
         lamp_note = _lamp_note(covered_until, end, on_fraction is None)
 
     client = deps.get_weather_client()
@@ -217,7 +239,7 @@ async def dli_performance(
         # — asking for the matching position is what keeps the comparison
         # like-for-like.
         predicted_natural = predict_natural_dli_from_weather(
-            model, forecasts, at_plant_level=is_total
+            model, forecasts, at_plant_level=is_total, attenuation=ratio_by_day
         )
     except Exception as e:
         return _page(header + f"<h1>Weather data error: {e}</h1>")

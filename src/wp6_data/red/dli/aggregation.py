@@ -9,7 +9,6 @@ import pandas as pd
 from wp6_data.red.dli.calculator import integrate_over_time
 from wp6_data.red.dli.constants import (
     MIN_INDOOR_PAR_INTEGRAL,
-    MIN_OUTDOOR_LUX_HOURS,
     SECONDS_PER_HOUR,
 )
 from wp6_data.shared.aggregation import (
@@ -23,8 +22,7 @@ __all__ = [
     "add_day_of_year_features",
     "aggregate_to_daily",
     "align_daily_dataframes",
-    "align_outdoor_to_indoor_daily",
-    "align_weather_to_outdoor_daily",
+    "align_weather_to_indoor_daily",
     "encode_day_of_year",
 ]
 
@@ -38,7 +36,7 @@ def _daily_integral(
     rows. A sum measures how often the sensor reported: red's s1000 fell from
     ~270 readings a day to 97 in June 2026 with the year's highest mean lux, so
     its summed daily total collapsed to a third on the brightest days — which is
-    exactly the signal stage 1 was being asked to learn.
+    exactly the signal the old outdoor-lux stage was being asked to learn.
     """
     rows = [
         {
@@ -52,135 +50,74 @@ def _daily_integral(
     return pd.DataFrame(rows, columns=["date", value_col])
 
 
-def align_weather_to_outdoor_daily(
-    weather_df: pd.DataFrame,
-    outdoor_df: pd.DataFrame,
-    min_lux: float = MIN_OUTDOOR_LUX_HOURS,
-) -> pd.DataFrame:
-    """Align and aggregate OpenMeteo + s1000 data to daily totals.
-
-    Handles both single-radiation (solar_radiation) and multi-radiation
-    (direct_radiation, diffuse_radiation) weather data formats.
-
-    Args:
-        weather_df: Weather data with datetime, solar_radiation/direct_radiation columns
-        outdoor_df: Outdoor sensor data with time, lux columns
-        min_lux: Minimum daily lux-hours for valid daylight
-
-    Returns:
-        Merged DataFrame with daily weather and lux data
-    """
+def _weather_daily(weather_df: pd.DataFrame) -> pd.DataFrame:
+    """OpenMeteo hourly rows as one row per day, under the model's feature names."""
     weather = weather_df.copy()
-    outdoor = outdoor_df.copy()
-
     weather["datetime"] = pd.to_datetime(weather["datetime"], utc=True)
-    outdoor["time"] = pd.to_datetime(outdoor["time"], utc=True)
-
     weather["date"] = weather["datetime"].dt.date
-    outdoor["date"] = outdoor["time"].dt.date
 
-    # Build aggregation dict based on available columns
     agg_dict: dict[str, str] = {}
-
     # Global horizontal irradiance, under its own name. The legacy
     # solar_radiation -> direct_radiation_sum rename below is kept for callers
-    # that still pass a beam column through the generic slot, but stage 1 asks
+    # that still pass a beam column through the generic slot, but the model asks
     # for shortwave explicitly so it can never be handed a different quantity.
     if "shortwave_radiation" in weather.columns:
         agg_dict["shortwave_radiation"] = "sum"
-
     if "direct_radiation" in weather.columns:
         agg_dict["direct_radiation"] = "sum"
     elif "solar_radiation" in weather.columns:
         agg_dict["solar_radiation"] = "sum"
-
     if "diffuse_radiation" in weather.columns:
         agg_dict["diffuse_radiation"] = "sum"
     if "cloud_cover" in weather.columns:
         agg_dict["cloud_cover"] = "mean"
-
     if not agg_dict:
         raise ValueError("No radiation columns found in weather data")
 
-    weather_daily = weather.groupby("date").agg(agg_dict).reset_index()
-
-    # Rename columns to standard names
-    rename_map = {
-        "shortwave_radiation": "shortwave_sum",
-        "solar_radiation": "direct_radiation_sum",
-        "direct_radiation": "direct_radiation_sum",
-        "diffuse_radiation": "diffuse_radiation_sum",
-        "cloud_cover": "cloud_cover_avg",
-    }
-    weather_daily = weather_daily.rename(columns=rename_map)
-
-    # Outdoor lux integrated over the day, in lux-hours.
-    outdoor_daily = _daily_integral(outdoor, "lux", time_col="time", per_hour=True)
-    outdoor_daily.columns = ["date", "lux_hours"]
-
-    # Merge
-    merged = weather_daily.merge(outdoor_daily, on="date", how="inner")
-
-    if merged.empty:
-        return merged
-
-    # Filter valid days
-    merged = merged[merged["lux_hours"] > min_lux]
-    if "direct_radiation_sum" in merged.columns:
-        merged = merged[merged["direct_radiation_sum"] > 0]
-
-    return merged
+    return (
+        weather.groupby("date").agg(agg_dict).reset_index().rename(columns={
+            "shortwave_radiation": "shortwave_sum",
+            "solar_radiation": "direct_radiation_sum",
+            "direct_radiation": "direct_radiation_sum",
+            "diffuse_radiation": "diffuse_radiation_sum",
+            "cloud_cover": "cloud_cover_avg",
+        })
+    )
 
 
-def align_outdoor_to_indoor_daily(
-    outdoor_df: pd.DataFrame,
+def align_weather_to_indoor_daily(
+    weather_df: pd.DataFrame,
     indoor_df: pd.DataFrame,
-    min_lux: float = MIN_OUTDOOR_LUX_HOURS,
     min_par: float = MIN_INDOOR_PAR_INTEGRAL,
 ) -> pd.DataFrame:
-    """Align and aggregate s1000 + indoor PAR data to daily totals.
+    """Daily OpenMeteo weather next to the daily PAR integral it should predict.
+
+    One join, weather straight to the above-lamp sensor. There used to be an
+    outdoor-lux step in between (s1000), but at forecast time that step only
+    passed a prediction through, and two chained fits compound their errors:
+    the direct fit scores better out of sample than the chain did in sample
+    (MODEL_PAPER §5.7).
 
     Args:
-        outdoor_df: Outdoor sensor data with time, lux columns
-        indoor_df: Indoor PAR sensor data with time/datetime, value/par columns
-        min_lux: Minimum daily lux-hours for valid daylight
-        min_par: Minimum daily PAR integral (μmol/m²) for valid readings
+        weather_df: OpenMeteo hourly rows with ``datetime`` and radiation columns
+        indoor_df: PAR readings with ``time``/``datetime`` and ``value``/``par``
+        min_par: Minimum daily PAR integral (μmol/m²) for a day the sensor was
+            really measuring
 
     Returns:
-        Merged DataFrame with daily lux and PAR data
+        One row per day both cover: the weather sums and ``par_integral``.
     """
-    outdoor = outdoor_df.copy()
     indoor = indoor_df.copy()
-
-    outdoor["time"] = pd.to_datetime(outdoor["time"], utc=True)
-
-    # Handle different column names
-    if "time" in indoor.columns:
-        indoor["datetime"] = pd.to_datetime(indoor["time"], utc=True)
-    else:
-        indoor["datetime"] = pd.to_datetime(indoor["datetime"], utc=True)
-
+    time_col = "time" if "time" in indoor.columns else "datetime"
+    indoor["datetime"] = pd.to_datetime(indoor[time_col], utc=True)
     if "value" in indoor.columns:
         indoor["par"] = indoor["value"]
-
-    outdoor["date"] = outdoor["time"].dt.date
     indoor["date"] = indoor["datetime"].dt.date
-
-    # Both sides integrated over time, never summed across rows.
-    outdoor_daily = _daily_integral(outdoor, "lux", time_col="time", per_hour=True)
-    outdoor_daily.columns = ["date", "lux_hours"]
 
     indoor_daily = _daily_integral(indoor, "par", time_col="datetime")
     indoor_daily.columns = ["date", "par_integral"]
 
-    # Merge
-    merged = outdoor_daily.merge(indoor_daily, on="date", how="inner")
-
+    merged = _weather_daily(weather_df).merge(indoor_daily, on="date", how="inner")
     if merged.empty:
         return merged
-
-    # Filter valid days
-    merged = merged[merged["lux_hours"] > min_lux]
-    merged = merged[merged["par_integral"] > min_par]
-
-    return merged
+    return merged[merged["par_integral"] > min_par]

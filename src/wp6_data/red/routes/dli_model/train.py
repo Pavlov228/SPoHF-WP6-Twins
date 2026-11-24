@@ -1,4 +1,4 @@
-"""POST /dli/model/train — Train the two-stage light prediction model."""
+"""POST /dli/model/train — Train the daily light model."""
 
 from datetime import UTC, datetime
 
@@ -11,7 +11,6 @@ from wp6_data.red.dli import (
     DEFAULT_TRAINING_START,
     NATURAL_LIGHT_SENSOR,
     TOTAL_LIGHT_SENSOR,
-    WEATHER_STATION_SENSOR,
     ModelStats,
     OpenMeteoClient,
     get_model,
@@ -23,7 +22,7 @@ router = APIRouter()
 
 
 async def train_model_from_db(db: MySQLConnection, weather_client: OpenMeteoClient) -> ModelStats:
-    """Train the two-stage light prediction model from database data.
+    """Train the daily light model from database data.
 
     Fetches sensor data and weather data, trains the model, and saves it.
     Returns ModelStats on success, raises on failure.
@@ -46,13 +45,7 @@ async def train_model_from_db(db: MySQLConnection, weather_client: OpenMeteoClie
     if above_lamp_df.empty:
         raise ValueError(f"No indoor PAR data ({NATURAL_LIGHT_SENSOR}) found for training")
 
-    indoor_df = above_lamp_df
-
-    outdoor_df = await db.get_weather_station_readings(start=start_dt, end=end_dt)
-    if outdoor_df.empty:
-        raise ValueError(f"No weather station data ({WEATHER_STATION_SENSOR}) found for training")
-
-    # Stage 1 is fitted on global horizontal irradiance alone. Asking for the
+    # The weather link is fitted on global horizontal irradiance alone. Asking for the
     # column by name — rather than through the generic radiation slot, which
     # renames whatever it is given to `solar_radiation` — is what stops a beam
     # series being fitted as though it were shortwave.
@@ -67,8 +60,7 @@ async def train_model_from_db(db: MySQLConnection, weather_client: OpenMeteoClie
     model = await get_model()
     stats = model.train(
         weather_df=weather_df,
-        outdoor_df=outdoor_df,
-        indoor_df=indoor_df,
+        indoor_df=above_lamp_df,
         indoor_sensor=NATURAL_LIGHT_SENSOR,
         plant_level_df=plant_level_df if not plant_level_df.empty else None,
         above_lamp_df=above_lamp_df,
@@ -80,7 +72,7 @@ PAGE_TITLE = "SPoHF Red - Train DLI Model"
 
 @router.post("/train", response_class=HTMLResponse)
 async def dli_model_train() -> str:
-    """Train the two-stage light prediction model."""
+    """Train the daily light model."""
     if not dli_data.is_connected():
         return render_page(
             PAGE_TITLE,
@@ -98,24 +90,19 @@ async def dli_model_train() -> str:
         )
 
     stats_grid = render_stat_grid([
-        (f"{stats.r2_score:.3f}", "Combined R²"),
-        (f"{stats.stage1.r2_score:.3f}", "Stage 1 R²"),
-        (f"{stats.stage2.r2_score:.3f}", "Stage 2 R²"),
+        (f"{stats.r2_score:.3f}", "R² (out-of-fold)"),
         (f"{stats.n_samples:,}", "Days"),
-        (f"{stats.attenuation_factor:.3f}", "Attenuation"),
-    ], cols=5)
+        (f"{stats.attenuation_factor:.3f}", "Attenuation (fallback)"),
+    ], cols=3)
 
     content = f"""
         <article style="border: 2px solid var(--pico-ins-color, green)">
-            <h1>Two-Stage Model Trained (Daily)</h1>
+            <h1>Light Model Trained (Daily)</h1>
             {stats_grid}
-                <p>
-                     <strong>Stage 1</strong>: OpenMeteo daily direct_radiation
-                     → {WEATHER_STATION_SENSOR} daily lux
-                </p>
-                <p><strong>Stage 2</strong>: {WEATHER_STATION_SENSOR} daily lux
-                    → {NATURAL_LIGHT_SENSOR} (above-lamp)
-               → ×{stats.attenuation_factor:.3f} → plant-level estimate</p>
+            <p>OpenMeteo daily shortwave → {NATURAL_LIGHT_SENSOR} (above the lamps)
+               → × canopy/roof ratio → {TOTAL_LIGHT_SENSOR} (canopy). The ratio is
+               the recent measured one where known, else
+               {stats.attenuation_factor:.3f}.</p>
             <p>
                 Model saved and will be used for PAR predictions.
                 <a href="/dli/model">View full model details</a>

@@ -57,8 +57,6 @@ async def _train_dli_model_if_missing() -> None:
             "dli_model_trained",
             seconds=round(time.monotonic() - started, 1),
             r2=stats.r2_score,
-            r2_stage1=stats.stage1.r2_score,
-            r2_stage2=stats.stage2.r2_score,
             n_samples=stats.n_samples,
         )
     except Exception:
