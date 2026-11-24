@@ -21,6 +21,7 @@ from wp6_data.red.lamp import (
     LAMP_SOURCE_LETSGROW,
     LAMP_SOURCE_SENSORS,
     LAMP_THRESHOLD,
+    MAX_PREDICTED_ROOF_RATIO,
     MIN_RATIO_DAYS,
     RECENT_DAYS,
     LampModel,
@@ -630,4 +631,59 @@ class TestAttenuationByDate:
         natural, canopy, status = _greenhouse(MIN_RATIO_DAYS - 1, 180.0, self.LIT)
 
         assert attenuation_by_date(natural, canopy, status).isna().all()
+
+
+class TestAttenuationAgainstAPredictedRoof:
+    """The forecast's ratio: canopy natural light over the roof the model predicted."""
+
+    LIT = TestAttenuationByDate.LIT
+
+    @staticmethod
+    def _roof_dli(natural: pd.DataFrame, scale: float = 1.0) -> dict:
+        """The roof's measured DLI per day, × ``scale`` as a model's prediction."""
+        from wp6_data.red.dli.calculator import hourly_par_sum_to_dli
+
+        by_day = natural.groupby(natural["time"].dt.date)["value"].sum()
+        return {d: hourly_par_sum_to_dli(v) * scale for d, v in by_day.items()}
+
+    def test_a_perfect_prediction_gives_the_measured_ratio(self):
+        natural, canopy, status = _greenhouse(2 * RECENT_DAYS, 180.0, self.LIT)
+
+        ratio = attenuation_by_date(
+            natural, canopy, status, predicted_roof=self._roof_dli(natural),
+        )
+
+        assert ratio.dropna().to_numpy() == pytest.approx(_ATTENUATION, abs=1e-6)
+
+    def test_it_absorbs_the_predictions_bias(self):
+        """A model 20% low on the roof is corrected by a ratio 1/0.8 higher."""
+        natural, canopy, status = _greenhouse(2 * RECENT_DAYS, 180.0, self.LIT)
+
+        ratio = attenuation_by_date(
+            natural, canopy, status, predicted_roof=self._roof_dli(natural, 0.8),
+        )
+
+        assert ratio.dropna().to_numpy() == pytest.approx(_ATTENUATION / 0.8, abs=1e-6)
+
+    def test_it_may_exceed_one_up_to_the_cap(self):
+        """A day forecast dull and found bright is information, not a bad day."""
+        natural, canopy, status = _greenhouse(2 * RECENT_DAYS, 180.0, self.LIT)
+        under = _ATTENUATION / (0.9 * MAX_PREDICTED_ROOF_RATIO)  # ratio 0.9 × the cap
+        beyond = _ATTENUATION / (1.1 * MAX_PREDICTED_ROOF_RATIO)
+
+        kept = attenuation_by_date(
+            natural, canopy, status, predicted_roof=self._roof_dli(natural, under),
+        )
+        dropped = attenuation_by_date(
+            natural, canopy, status, predicted_roof=self._roof_dli(natural, beyond),
+        )
+
+        assert kept.dropna().to_numpy() == pytest.approx(0.9 * MAX_PREDICTED_ROOF_RATIO)
+        assert kept.dropna().min() > 1
+        assert dropped.isna().all()
+
+    def test_a_day_without_a_prediction_contributes_nothing(self):
+        natural, canopy, status = _greenhouse(2 * RECENT_DAYS, 180.0, self.LIT)
+
+        assert attenuation_by_date(natural, canopy, status, predicted_roof={}).isna().all()
 

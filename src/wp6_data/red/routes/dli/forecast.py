@@ -33,6 +33,7 @@ from wp6_data.red.lamp import (
 )
 from wp6_data.shared import make_schedule_chart, render_page, render_stat_grid, utc_day_bounds
 from wp6_data.shared.time import display_tz
+from wp6_data.shared.weather import DailyForecast
 
 router = APIRouter()
 log = structlog.get_logger()
@@ -77,7 +78,10 @@ async def dli_forecast(
     # The ratio carries the natural prediction from the roof down to the canopy.
     # It moves over the year (~0.4 to ~0.8), so each day takes the one a
     # forecast would have known for it; today and later take the latest measured
-    # one. The model's fitted ratio is only the fallback.
+    # one. The model's fitted ratio is only the fallback. The roof in that ratio
+    # is the one the model *predicted*, so the ratio also corrects the weather
+    # link's own seasonal miss (MODEL_PAPER §5.9) — which needs the weather over
+    # the ratio's history, not only over the days shown.
     recent_start = today - timedelta(days=RECENT_DAYS)
     history_start, _ = utc_day_bounds(
         min(start_date, recent_start)
@@ -106,6 +110,17 @@ async def dli_forecast(
         on_fraction = None
     on_fraction_or_empty = on_fraction if on_fraction is not None else pd.Series(dtype=float)
 
+    forecasts: list[DailyForecast] = []
+    predicted_roof: dict[date, float] | None = None
+    if model.is_trained():
+        try:
+            forecasts = await fetch_weather_for_range(client, history_start.date(), end_date)
+            predicted_roof = predict_natural_dli_from_weather(
+                model, [f for f in forecasts if f.date < today], at_plant_level=False,
+            )
+        except Exception as e:  # noqa: BLE001 - no weather is "predictions unavailable"
+            log.warning("forecast_weather_unavailable", error=str(e))
+
     above_hist = history_df[history_df["device"] == NATURAL_LIGHT_SENSOR]
     canopy_hist = history_df[history_df["device"] == TOTAL_LIGHT_SENSOR]
 
@@ -127,9 +142,11 @@ async def dli_forecast(
         observed_lamps, _ = observed_lamp_par(above_hist, canopy_hist, on_fraction_or_empty)
         ratio_by_day = attenuation_by_date(
             above_hist, canopy_hist, on_fraction_or_empty,
-            lag_days=FORECAST_RATIO_LAG_DAYS,
+            lag_days=FORECAST_RATIO_LAG_DAYS, predicted_roof=predicted_roof,
         ).dropna().to_dict()
-        latest = attenuation_by_date(above_hist, canopy_hist, on_fraction_or_empty).dropna()
+        latest = attenuation_by_date(
+            above_hist, canopy_hist, on_fraction_or_empty, predicted_roof=predicted_roof,
+        ).dropna()
         if not latest.empty:
             recent_ratio = float(latest.iloc[-1])
     lamp_schedule = lamp_hourly_par(lamp)
@@ -167,18 +184,18 @@ async def dli_forecast(
     predicted_df = None
     natural_df = None
 
-    if model.is_trained():
+    shown = [f for f in forecasts if start_date <= f.date <= end_date]
+    if shown:
         try:
-            forecasts = await fetch_weather_for_range(client, start_date, end_date)
             daily_natural_dli = predict_natural_dli_from_weather(
-                model, forecasts,
-                attenuation={f.date: r for f in forecasts if (r := ratio_for(f.date))},
+                model, shown,
+                attenuation={f.date: r for f in shown if (r := ratio_for(f.date))},
             )
 
             predicted_records = []
             natural_records = []
 
-            for forecast in forecasts:
+            for forecast in shown:
                 day_natural_dli = daily_natural_dli[forecast.date]
 
                 for h in forecast.hourly:
@@ -360,8 +377,9 @@ async def dli_forecast(
 
     if model.is_trained():
         lamp_note += (
-            f" Natural light is carried to the canopy at {recent_ratio:.2f} of the "
-            f"roof's, the ratio measured over the last {RECENT_DAYS} days."
+            f" Natural light at the canopy is {recent_ratio:.2f} of the roof light the "
+            f"model predicts: the ratio over the last {RECENT_DAYS} days, which also "
+            "corrects the model's own seasonal miss."
             if recent_ratio is not None else
             f" Natural light is carried to the canopy at {model.attenuation_factor:.2f} "
             "of the roof's, the model's fitted ratio — too few recent days to "

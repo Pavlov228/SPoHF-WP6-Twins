@@ -104,17 +104,24 @@ shaped this way: red [ADR 0005](../docs/adr/0005-dli-model-one-fit-and-measured-
 
 ### 3.3 Link 2: the canopy/roof ratio
 
-The share of natural light that reaches the canopy sensor. Per day:
+The share of natural light that reaches the canopy sensor. Per day, for the
+forecast and `/dli/performance`:
 
 ```
-ratio = (canopy − lamp) / roof        (daily integrals)
+ratio = (canopy − lamp) / predicted roof        (daily DLI)
 ```
+
+The denominator is what link 1 *predicted* for the roof from OpenMeteo, not
+what the roof sensor measured (since 2026-11-24, §5.9). The ratio then corrects
+link 1's own seasonal miss along with the crop's. Against the measured roof
+(`predicted_roof` not passed) it is the physical canopy/roof share.
 
 `lamp` is what `red.lamp.observed_lamp_par` says ran: LetsGrow's switch × the
 lamp level measured on dark hours. The ratio is the **median over 14 days**
 (`red.lamp.attenuation_by_date`). Days outside (0, 1] are dropped, because there
-the lamp estimate was wrong. A window needs at least 5 days before it says
-anything.
+the lamp estimate was wrong; against the predicted roof the bound is (0, 1.5],
+since a day OpenMeteo thought dull can legitimately exceed 1. A window needs at
+least 5 days before it says anything.
 
 Which window depends on what is being predicted:
 
@@ -396,11 +403,43 @@ daily total-DLI MAE:
   straight through. (The leave-one-month-out slope moves only 0.192–0.194: the
   year-wide fit is stable, it is just the wrong shape.)
 - **What to do about it:** take the ratio against the *predicted* roof light, so
-  it absorbs link 1's season as well. Replayed: forecast MAE 2.71 → 2.60, worst
-  month +1.4 → +1.0. Filed as issue 076; not adopted yet.
+  it absorbs link 1's season as well. Adopted in §5.9.
 - **Considered and dropped:** shipping this as an opt-in "measured inputs" view
   on `/dli/performance`. It is a second, unforecastable prediction beside the
   real one, and the finding above is all it had to say.
+
+### 5.9 The ratio against the predicted roof (adopted 2026-11-24 — measured)
+
+`attenuation_by_date(..., predicted_roof=...)`, fed by
+`predict_natural_dli_from_weather(model, ..., at_plant_level=False)` over the
+ratio's history window. Both pages now fetch OpenMeteo from the start of that
+window, not only for the days shown.
+
+Live `/dli/performance` (total), same model, measured-roof ratio → predicted-roof
+ratio:
+
+| window | MAE | bias | MAPE |
+|---|---|---|---|
+| 1 Oct 2025 – 22 Nov 2026 | 2.67 → **2.53** | +0.35 → +0.45 | 37.7% → 37.1% |
+| Nov 2025 – Mar 2026 | 2.50 → 2.44 | +0.85 → +0.82 | 27.4% → 27.1% |
+| Sep – Nov 2026 | 2.04 → **1.82** | +0.46 → +0.02 | 14.1% → 12.5% |
+
+Monthly bias, worst month +1.35 (Nov 2026) → +1.13 (Feb 2026). Spring and
+summer moved most: May −1.01 → +0.36, Sep +0.92 → +0.02.
+
+- **Winter still overshoots** by +0.8 to +1.1 each month Oct–Feb. That is not
+  link 1's season (the ratio now absorbs it) but its noise: on a dull winter
+  day the canopy is mostly lamp, so the day's ratio is mostly the lamp
+  estimate's error (§7.3).
+- **The bias went up overall**, +0.35 → +0.45, while the error went down. The
+  old figure was the closer average only because summer undershoot cancelled
+  winter overshoot; per month the new one is smaller nearly everywhere.
+- **Bounded at 1.5.** The replay with the cap at 1.5 is what was measured; 1.0
+  would throw away exactly the days that teach the ratio about OpenMeteo's
+  dull-day misses.
+- The past days use OpenMeteo's *archive* weather, not the forecast that was
+  issued then; the archive is the better of the two, so the past-day ratio is
+  mildly optimistic.
 
 ## 6. Performance
 
@@ -488,9 +527,10 @@ day-to-day error of OpenMeteo's sun against the greenhouse's own (§7.5).
   gate contain this; they do not remove it
 - **Needs both PAR sensors and LetsGrow.** Without them the fitted constant
   stands in, with the seasonal error it brings (§5.7)
-- **It does not cover link 1's season.** The ratio is canopy over *measured*
-  roof, so the weather link's own seasonal miss (one coefficient for a roof
-  that transmits ~25% less at a December sun) passes straight through (§5.8)
+- **It covers link 1's season only because it is taken against the predicted
+  roof** (§5.9). Against the measured roof, the weather link's seasonal miss
+  (one coefficient for a roof that transmits ~25% less at a December sun)
+  would pass straight through (§5.8)
 - The ratio follows the *sensor*, not necessarily the crop: if the crop shades
   the canopy sensor, the predicted canopy DLI is what that sensor would read
 
@@ -533,5 +573,5 @@ than fitting it once.**
 ---
 
 *Model Version: 11 (one weather fit to above-lamp PAR, rolling canopy/roof ratio, lamps from LetsGrow)*
-*v11 results and §5.8 measured 2026-11-24; §6.2 measured 2026-09-18*
+*v11 results, §5.8 and §5.9 measured 2026-11-24; §6.2 measured 2026-09-18*
 *Data Range: November 2025 – November 2026*

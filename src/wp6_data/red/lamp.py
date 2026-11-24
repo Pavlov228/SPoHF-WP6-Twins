@@ -32,6 +32,7 @@ the wrap.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import IntEnum
@@ -353,6 +354,13 @@ def _daylight_level(
     implied = (lit["canopy"] - lit["above"] * attenuation) / lit["on"]
     level = float(implied.median())
     return level if level > 0 else None
+
+
+def _hourly_sum_to_dli(par_sum: float) -> float:
+    """``dli.calculator.hourly_par_sum_to_dli``, imported lazily as below."""
+    from wp6_data.red.dli.calculator import hourly_par_sum_to_dli
+
+    return hourly_par_sum_to_dli(par_sum)
 
 
 def _min_indoor_par() -> float:
@@ -888,6 +896,13 @@ FORECAST_RATIO_LAG_DAYS = 3
 # one or two would hand that scatter straight to the prediction.
 MIN_RATIO_DAYS = 5
 
+# Against a *predicted* roof the daily ratio may exceed 1: a day OpenMeteo
+# thought dull and the greenhouse found bright. Those days are real information
+# about the forecast's error, so the cap is looser than measured natural light's
+# physical ceiling of 1 — loose enough to keep them, tight enough to drop a day
+# the lamp estimate or the weather archive got badly wrong (MODEL_PAPER §5.9).
+MAX_PREDICTED_ROOF_RATIO = 1.5
+
 
 def attenuation_by_date(
     above_lamp_df: pd.DataFrame,
@@ -897,6 +912,7 @@ def attenuation_by_date(
     window_days: int = RECENT_DAYS,
     centred: bool = False,
     lag_days: int = 0,
+    predicted_roof: Mapping[date, float] | None = None,
 ) -> pd.Series:
     """The canopy/roof ratio of natural light, per date, over a rolling window.
 
@@ -914,6 +930,14 @@ def attenuation_by_date(
     ``lag_days`` keeps the newest that many days out of each window, so a past
     day can be scored with only what a forecast would have had (see
     :data:`FORECAST_RATIO_LAG_DAYS`).
+
+    ``predicted_roof`` (daily DLI by date, what the weather link predicted for
+    the above-lamp sensor) replaces the measured roof as the denominator. The
+    ratio then carries the weather link's own seasonal miss as well as the
+    crop's: the radiation → roof factor runs ~0.14 in December to ~0.20 in
+    July, and one fitted coefficient cannot follow it (MODEL_PAPER §5.8). For a
+    forecast's ratio, not for describing the greenhouse — the measured roof is
+    still what gates a day as reported.
 
     Indexed by ``date``. Days the window has nothing for are NaN rather than
     filled: the caller falls back to the model's fitted ``attenuation_factor``,
@@ -933,10 +957,20 @@ def attenuation_by_date(
     daily = daily[daily["above"] > _min_indoor_par()]
     if daily.empty:
         return pd.Series(dtype=float)
-    ratio = (daily["canopy"] - daily["lamp"]) / daily["above"]
-    # Natural light cannot grow on its way down, nor go negative: a day outside
-    # that range is a day the lamp estimate was wrong, not a ratio.
-    ratio = ratio[(ratio > 0) & (ratio <= 1)]
+    natural = daily["canopy"] - daily["lamp"]
+    if predicted_roof is None:
+        ratio = natural / daily["above"]
+        # Natural light cannot grow on its way down, nor go negative: a day
+        # outside that range is a day the lamp estimate was wrong, not a ratio.
+        ceiling = 1.0
+    else:
+        roof = pd.Series(
+            [predicted_roof.get(day.date(), np.nan) for day in daily.index],
+            index=daily.index, dtype=float,
+        )
+        ratio = (natural.map(_hourly_sum_to_dli) / roof).dropna()
+        ceiling = MAX_PREDICTED_ROOF_RATIO
+    ratio = ratio[(ratio > 0) & (ratio <= ceiling)]
     if ratio.empty:
         return pd.Series(dtype=float)
 

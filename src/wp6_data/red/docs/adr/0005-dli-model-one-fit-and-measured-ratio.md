@@ -40,7 +40,9 @@ Measured over the 339 days with a canopy sensor, out of fold, lamps as they ran
   Refitted nightly on prod, as before (root [ADR 0007](../../../../../docs/adr/0007-trained-models-persist-and-are-fingerprinted.md)).
 - **Link 2, measured:** × the canopy/roof ratio from
   `red.lamp.attenuation_by_date`, i.e. daily (canopy − LetsGrow lamps) / roof,
-  median over 14 days.
+  median over 14 days. *Amended 2026-11-24:* the roof in that ratio is the one
+  link 1 predicted, not the measured one, so the ratio also corrects link 1's
+  seasonal miss (MODEL_PAPER §5.9; daily MAE 2.67 → 2.53).
   - Days ahead on `/dli/forecast`: the newest ratio.
   - Past days (`/dli/forecast`, `/dli/performance`): the ratio a forecast would
     have had, the 14 days ending 3 days earlier.
@@ -69,7 +71,7 @@ Measured over the 339 days with a canopy sensor, out of fold, lamps as they ran
   greenhouse's own:** ~3 mol/m²/day; LetsGrow's radiation sensor gets ~2.2, but
   only for past days. **At the canopy the ratio's lag costs more than the
   weather** (MODEL_PAPER §5.8): ~0.6 mol/m²/day against ~0.2. Taking the ratio
-  against the predicted roof light is issue 076.
+  against the predicted roof light (issue 076) was adopted for that reason.
 - s1000 is no longer a DLI input. It stays in `metadata.yaml`, on the model
   diagnostic page's raw counts, and in the climate model, whose link 1 still targets it.
 

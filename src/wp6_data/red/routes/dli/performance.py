@@ -119,9 +119,10 @@ def _lamp_note(covered_until, end: date, unavailable: bool) -> str:
         "<p class=\"note\">Predicted total = predicted natural light + the lamps "
         f"<strong>as they actually ran</strong>, per LetsGrow.{tail} So this scores "
         "the natural-light model; the lamp schedule is not being forecast here. "
-        "Natural light reaches the canopy at the canopy/roof ratio a forecast would "
-        f"have had: the {RECENT_DAYS} days ending {FORECAST_RATIO_LAG_DAYS} days "
-        "before each day.</p>"
+        "Natural light reaches the canopy at the ratio a forecast would have had: "
+        "measured canopy natural light over the roof light the model predicted, "
+        f"the {RECENT_DAYS} days ending {FORECAST_RATIO_LAG_DAYS} days before each "
+        "day.</p>"
     )
 
 
@@ -195,15 +196,18 @@ async def dli_performance(
     # *as a forecast would have known it*: the fortnight ending
     # FORECAST_RATIO_LAG_DAYS before each day. A ratio from around the day itself
     # would score better and mean less — it is not something a forecast has.
+    # The roof in that ratio is the one the weather link *predicted*, so the
+    # ratio also corrects the link's own seasonal miss (MODEL_PAPER §5.9).
     #
     # The window starts early enough that the first days have a level and a ratio.
     lamp_dli: dict[date, float] = {}
     ratio_by_day: dict[date, float] | None = None
     lamp_note = ""
+    client = deps.get_weather_client()
+    weather_start = start
     if is_total:
-        lamp_window_start, _ = utc_day_bounds(
-            start - timedelta(days=RECENT_DAYS + FORECAST_RATIO_LAG_DAYS)
-        )
+        weather_start = start - timedelta(days=RECENT_DAYS + FORECAST_RATIO_LAG_DAYS)
+        lamp_window_start, _ = utc_day_bounds(weather_start)
         try:
             lamp_par_df = await dli_data.get_par_readings(
                 device_ids=[NATURAL_LIGHT_SENSOR, TOTAL_LIGHT_SENSOR],
@@ -222,17 +226,22 @@ async def dli_performance(
             on_fraction if on_fraction is not None else pd.Series(dtype=float),
         )
         lamp_dli = daily_lamp_dli(lamp_par)
-        ratio_by_day = attenuation_by_date(
-            lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
-            lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
-            on_fraction if on_fraction is not None else pd.Series(dtype=float),
-            lag_days=FORECAST_RATIO_LAG_DAYS,
-        ).dropna().to_dict()
         lamp_note = _lamp_note(covered_until, end, on_fraction is None)
 
-    client = deps.get_weather_client()
     try:
-        forecasts = await fetch_weather_for_range(client, start, end)
+        # One fetch for the ratio's history and the days scored.
+        forecasts = await fetch_weather_for_range(client, weather_start, end)
+        if is_total:
+            ratio_by_day = attenuation_by_date(
+                lamp_par_df[lamp_par_df["device"] == NATURAL_LIGHT_SENSOR],
+                lamp_par_df[lamp_par_df["device"] == TOTAL_LIGHT_SENSOR],
+                on_fraction if on_fraction is not None else pd.Series(dtype=float),
+                lag_days=FORECAST_RATIO_LAG_DAYS,
+                predicted_roof=predict_natural_dli_from_weather(
+                    model, forecasts, at_plant_level=False
+                ),
+            ).dropna().to_dict()
+        forecasts = [f for f in forecasts if f.date >= start]
         # Total is scored against the under-lamp sensor, so its natural half must
         # be carried down to plant level before the lamps are added. Natural is
         # scored against the above-lamp sensor, which attenuation has not touched
