@@ -52,7 +52,7 @@ class PeriodConfig(BaseModel):
     end: date
 
 
-def _bounds(start: date, end: date, timezone: str) -> tuple[datetime, datetime]:
+def local_bounds(start: date, end: date, timezone: str) -> tuple[datetime, datetime]:
     """The half-open local span as UTC datetimes the provider can take."""
     lo = pd.Timestamp(datetime.combine(start, time.min), tz=timezone)
     hi = pd.Timestamp(datetime.combine(end, time.min), tz=timezone)
@@ -73,7 +73,7 @@ async def daily_series(
     absence into a coverage fraction (``cycles.exposure``) or a gap in a drawn
     bar, and zero-filling would quietly drag every aggregate towards zero.
     """
-    lo, hi = _bounds(start, end, timezone)
+    lo, hi = local_bounds(start, end, timezone)
     df = await provider.fetch_data(
         device_names=[metric.device],
         sensor_tags=[metric.sensor],
@@ -110,7 +110,7 @@ async def observations(
     Unbucketed: these are manual readings anchored at a fixed hour, so a bucket
     would only add a scan. The local date is what a period attaches on.
     """
-    lo, hi = _bounds(start, end, timezone)
+    lo, hi = local_bounds(start, end, timezone)
     df = await provider.fetch_data(
         device_names=devices, sensor_tags=[sensor], start=lo, end=hi,
     )

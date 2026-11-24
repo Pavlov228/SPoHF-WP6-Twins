@@ -86,6 +86,14 @@ per request from config arithmetic — deliberately *not* persisted, unlike a
 _Avoid_: "crop cycle" for a cohort — the cycle is the season, the cohort is one
 week's fruit within it.
 
+**Day length**:
+Hours in a local day that the canopy sensor (`s2100-02-par`, total light) reads
+above the DLI photoperiod threshold — the day minus the time *all* light, sun and
+lamps, is off. It is the DLI history page's "photoperiod at plant level", so the
+two can't disagree. A day of flat zeros is an outage, not a zero-hour day, and is
+left absent.
+_Avoid_: deriving it from DLI or PAR level — it is a duration, not an amount.
+
 **Development window**:
 A **Fruit cohort**'s `[start, end)` span — the period over which its climate
 exposure is aggregated. Paired with a *coverage* fraction, since red's

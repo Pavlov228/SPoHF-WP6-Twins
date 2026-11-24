@@ -14,7 +14,8 @@ import pandas as pd
 import pytest
 
 from wp6_data.red.crop_cycles.config import load_crop_cycles, to_cohort_spec, to_cycle_spec
-from wp6_data.red.crop_cycles.view_model import build_waterfall
+from wp6_data.red.crop_cycles.view_model import build_waterfall, daily_day_length
+from wp6_data.red.dli import DEFAULT_PHOTOPERIOD_THRESHOLD, calculate_daily_dli
 from wp6_data.shared.cycles import generate_cohorts
 
 RED_METADATA = Path(__file__).parent.parent / "src/wp6_data/red/metadata.yaml"
@@ -204,3 +205,54 @@ class TestCoverage:
         )
         assert all(lane.coverage == 0.0 for lane in view.lanes)
         assert len(view.partial) == len(view.lanes)
+
+
+class TestDayLength:
+    """Day length: hours above the DLI photoperiod threshold, per local day."""
+
+    TZ = "Europe/Amsterdam"
+
+    @staticmethod
+    def _readings(day: date, lit: tuple[int, int], tz: str, level: float = 200.0):
+        """10-minute PAR for one local day, ``level`` within ``[lit)`` hours."""
+        times = pd.date_range(pd.Timestamp(day, tz=tz), periods=144, freq="10min")
+        hours = times.hour + times.minute / 60
+        values = [level if lit[0] <= h < lit[1] else 0.0 for h in hours]
+        return pd.DataFrame({
+            "device": "par", "sensor": "par",
+            "time": times.tz_convert("UTC"), "value": values,
+        })
+
+    def test_counts_the_hours_light_is_on(self):
+        df = self._readings(date(2026, 1, 10), (6, 22), self.TZ)
+        out = daily_day_length(df, self.TZ)
+        assert out["date"].tolist() == [date(2026, 1, 10)]
+        assert out["value"].iloc[0] == pytest.approx(16, abs=0.2)
+
+    def test_light_below_the_dli_threshold_is_not_day(self):
+        # Under the photoperiod bar, yet integrating to more than the no-data
+        # gate: a reported day with zero hours of day in it.
+        df = self._readings(
+            date(2026, 1, 10), (6, 22), self.TZ,
+            level=DEFAULT_PHOTOPERIOD_THRESHOLD / 2,
+        )
+        out = daily_day_length(df, self.TZ)
+        assert out["value"].tolist() == [0.0]
+
+    def test_a_day_of_flat_zeros_is_absent_not_dark(self):
+        """Red's sensors read zero for weeks; that is an outage, not night."""
+        df = self._readings(date(2026, 6, 1), (0, 0), self.TZ)
+        assert daily_day_length(df, self.TZ).empty
+
+    def test_days_split_at_local_midnight(self):
+        # Lit 23:00–24:00 local is the *same* local day, though in UTC it is
+        # the previous one's evening (Amsterdam is ahead of UTC).
+        df = self._readings(date(2026, 1, 10), (23, 24), self.TZ, level=2000.0)
+        out = daily_day_length(df, self.TZ)
+        assert out["date"].tolist() == [date(2026, 1, 10)]
+
+    def test_matches_the_dli_pages_photoperiod(self):
+        """One definition of day length across the twin."""
+        df = self._readings(date(2026, 1, 10), (5, 21), "UTC")
+        expected = calculate_daily_dli(df)["photoperiod_hours"].iloc[0]
+        assert daily_day_length(df, "UTC")["value"].iloc[0] == expected

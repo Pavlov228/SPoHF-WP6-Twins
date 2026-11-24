@@ -19,6 +19,11 @@ from datetime import date
 
 import pandas as pd  # type: ignore[import-untyped]
 
+from wp6_data.red.dli import (
+    MIN_INDOOR_PAR_INTEGRAL,
+    UMOL_TO_MOL,
+    calculate_daily_dli,
+)
 from wp6_data.shared.aggregation import CHART_AGG_FUNCS
 from wp6_data.shared.cycles import (
     Cohort,
@@ -27,11 +32,58 @@ from wp6_data.shared.cycles import (
     exposure,
     generate_cohorts,
 )
-from wp6_data.shared.series import daily_series, observations
+from wp6_data.shared.series import daily_series, local_bounds, observations
 from wp6_data.shared.twin import SensorDataProvider
 from wp6_data.shared.waterfall import Lane, Marker
 
 from .config import ClimateMetric, CropCyclesConfig, CycleConfig, to_cohort_spec, to_cycle_spec
+
+# A day whose light integral falls below this saw essentially nothing: the
+# sensor did not really report. The DLI model's own indoor gate, as a DLI.
+_NO_LIGHT_DLI = MIN_INDOOR_PAR_INTEGRAL / UMOL_TO_MOL
+
+
+def daily_day_length(readings: pd.DataFrame, timezone: str) -> pd.DataFrame:
+    """Hours of light per local day, as ``date, value``.
+
+    Day length is the time the sensor reads above the DLI photoperiod threshold
+    — equivalently, the day minus the time *all* light, sun and lamps, is off.
+    It is the photoperiod ``calculate_daily_dli`` already reports, so this page
+    and the DLI history page cannot disagree about how long a day was.
+
+    A day of flat zeros is dropped, not reported as a zero-hour day: red's PAR
+    sensors read zero for weeks at a time in 2026, and a zero there is an absent
+    day, not a dark one. Dropping it lets coverage show the gap honestly.
+    """
+    daily = calculate_daily_dli(readings, timezone)
+    if daily.empty:
+        return pd.DataFrame(columns=["date", "value"])
+    lit = daily[daily["dli"] >= _NO_LIGHT_DLI]
+    return (
+        lit.rename(columns={"photoperiod_hours": "value"})
+        .groupby("date", as_index=False)["value"].mean()
+    )
+
+
+async def daily_climate(
+    provider: SensorDataProvider,
+    metric: ClimateMetric,
+    start: date,
+    end: date,
+    timezone: str,
+) -> pd.DataFrame:
+    """Daily values for ``metric`` over ``[start, end)``, derived or bucketed."""
+    if metric.derive is None:
+        return await daily_series(provider, metric, start, end, timezone)
+
+    lo, hi = local_bounds(start, end, timezone)
+    raw = await provider.fetch_data(
+        device_names=[metric.device], sensor_tags=[metric.sensor],
+        start=lo, end=hi,
+    )
+    if raw.empty or "time" not in raw:
+        return pd.DataFrame(columns=["date", "value"])
+    return daily_day_length(raw, timezone)
 
 
 @dataclass(frozen=True)
@@ -184,7 +236,7 @@ async def assemble_waterfall(
     first = min(c.start for c in cycles)
     last = max(c.end for c in cycles)
 
-    daily = await daily_series(provider, metric, first, last, timezone)
+    daily = await daily_climate(provider, metric, first, last, timezone)
     observed = await observations(
         provider, list(devices), sensor, first, last + spec.interval, timezone,
     )

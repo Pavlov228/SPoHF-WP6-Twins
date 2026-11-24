@@ -85,6 +85,16 @@ crop_cycles:
         device: s2100-02-par
         sensor: par
         agg: avg
+      # Hours the canopy sensor reads above the DLI photoperiod threshold: the
+      # day minus the time all light (sun and lamps) is off. Derived from raw
+      # readings, since a daily bucket cannot recover time-above-threshold.
+      - key: day_length
+        label: "Day length"
+        unit: "h"
+        device: s2100-02-par
+        sensor: par
+        agg: avg
+        derive: day_length
   cycles:
     - label: "2025 autumn"
       start: 2025-06-16    # PROVISIONAL

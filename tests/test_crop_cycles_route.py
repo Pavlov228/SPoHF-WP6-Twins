@@ -73,6 +73,13 @@ class StubProvider:
                 "value": [20.0] * days,
             })
 
+        if sensor_tags == ["par"]:                   # a derived climate leg
+            times = pd.date_range(start, end, freq="1h", inclusive="left")
+            return pd.DataFrame({
+                "device": "par", "sensor": "par", "time": times,
+                "value": [300.0 if 6 <= t.hour < 20 else 0.0 for t in times],
+            })
+
         rows = []                                     # the measurement leg
         for cohort in self.measured_cohorts:
             for i, device in enumerate(device_names or SIJIA_DEVICES):
@@ -166,6 +173,11 @@ class TestCropCyclesPage:
             if not deps.metadata.device(m.device).description
         ]
         assert not missing, f"no location declared for {missing}"
+
+    def test_day_length_is_a_climate_choice_derived_from_raw_par(self):
+        html = _page(provider=StubProvider(), climate="day_length")
+        assert "Day length" in html
+        assert "only partly covered" not in html
 
     def test_single_cultivar_can_be_selected(self):
         html = _page(

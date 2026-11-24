@@ -65,6 +65,24 @@ class TestLoadCropCycles:
             load_crop_cycles(p)
 
 
+class TestDerivedMetrics:
+    def test_day_length_is_declared_as_derived(self):
+        metric = load_crop_cycles(RED_METADATA).metric("day_length")
+        assert metric.key == "day_length"
+        assert metric.derive == "day_length"
+
+    def test_ordinary_metrics_are_not_derived(self, tmp_path):
+        p = tmp_path / "m.yaml"
+        p.write_text(MINIMAL)
+        assert load_crop_cycles(p).climate.metrics[0].derive is None
+
+    def test_unknown_derivation_fails_at_load(self, tmp_path):
+        p = tmp_path / "m.yaml"
+        p.write_text(MINIMAL.replace("agg: avg", "agg: avg\n        derive: nope"))
+        with pytest.raises(ValueError):
+            load_crop_cycles(p)
+
+
 class TestSelectors:
     def test_unknown_metric_key_falls_back_to_the_first(self):
         config = load_crop_cycles(RED_METADATA)

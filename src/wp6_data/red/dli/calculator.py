@@ -175,7 +175,7 @@ def _photoperiod_seconds(
     return photoperiod
 
 
-def calculate_daily_dli(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_daily_dli(df: pd.DataFrame, timezone: str = "UTC") -> pd.DataFrame:
     """Calculate DLI from PAR readings using trapezoidal integration.
 
     DLI (mol/m²/day) = ∫PAR(t)dt / 1,000,000
@@ -184,6 +184,9 @@ def calculate_daily_dli(df: pd.DataFrame) -> pd.DataFrame:
     Args:
         df: DataFrame with columns: device, sensor, time, value
             where value is PAR in μmol/m²/s
+        timezone: Whose midnight a day starts at. UTC by default, which is what
+            the DLI pages and model have always used; a caller that attaches
+            days to a local calendar (crop cycles) passes the display timezone.
 
     Returns:
         DataFrame with columns: date, device, dli, avg_par, photoperiod_hours, reading_count
@@ -195,7 +198,7 @@ def calculate_daily_dli(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
     df["time"] = pd.to_datetime(df["time"], utc=True)
-    df["date"] = df["time"].dt.date
+    df["date"] = df["time"].dt.tz_convert(timezone).dt.date
 
     results = []
 

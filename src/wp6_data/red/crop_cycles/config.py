@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel
@@ -34,11 +35,24 @@ class CohortConfig(BaseModel):
     duration_weeks: int
 
 
-# Red's names for the shared vocabulary. A climate metric *is* the wire-ready
-# seam: because red models wire heights as devices (ADR 0001), pointing one at a
-# growth section later means changing ``device`` to ``WS_01_01-h3``, with no
-# code change and no new abstraction.
-ClimateMetric = SeriesMetric
+class ClimateMetric(SeriesMetric):
+    """A shared daily series, optionally derived from raw readings.
+
+    A climate metric *is* the wire-ready seam: because red models wire heights
+    as devices (ADR 0001), pointing one at a growth section later means changing
+    ``device`` to ``WS_01_01-h3``, with no code change and no new abstraction.
+
+    Most metrics are a daily bucket the database aggregates (``agg``). A
+    ``derive``d one cannot be: *day length* is time spent above a threshold,
+    which no avg/min/max/sum of a bucket recovers, so it is computed from the
+    raw readings. ``agg`` still says how its days combine over a cohort's
+    window.
+    """
+
+    derive: Literal["day_length"] | None = None
+
+
+# Red's name for the shared vocabulary.
 CycleConfig = PeriodConfig
 
 
