@@ -1,13 +1,10 @@
-# Two-Stage Light Prediction Model for Greenhouse DLI Forecasting
-
-> **Superseded in part by v11 (§5.7).** The s1000 outdoor-lux stage is gone: the
-> model is now OpenMeteo → above-lamp PAR (one Ridge fit) × a *measured, rolling*
-> canopy/roof ratio, with the lamps from LetsGrow. §3's two-regression chain and
-> its constant attenuation describe v7–v10.
+# Light Prediction Model for Greenhouse DLI Forecasting
 
 ## Abstract
 
-This paper presents a two-stage machine learning model (v7) for predicting Daily Light Integral (DLI) inside a greenhouse using publicly available weather forecast data. The model predicts above-lamp PAR via two Ridge regression stages, then applies a constant attenuation factor to estimate plant-level light. By decomposing the problem into interpretable stages — weather calibration, greenhouse transmission, and internal attenuation — we achieve robust predictions despite limited training data. We document the sensor investigation that led to the current architecture, including failed approaches (direct s2100-02 training, polynomial features) and the key insight that training on the above-lamp sensor with post-hoc attenuation outperforms training on the plant-level sensor directly.
+This paper describes the model (v11) that predicts the Daily Light Integral (DLI) at the canopy of red's tomato greenhouse from freely available weather forecasts. It has two links. A Ridge regression maps OpenMeteo's daily shortwave radiation to the PAR integral at the sensor **above** the lamps, which sees natural light only. A **measured, rolling** canopy/roof ratio then carries that down to the canopy. The lamps are not modelled: LetsGrow, the climate computer that switches them, reports when they ran, and the forecast assumes their last few days' pattern continues.
+
+The paper also records how the model got here. Training on the plant-level sensor directly failed because it mixes lamp and natural light (§5.1–5.2). Polynomial features overfitted (§5.3). Daily totals were once sums of rows rather than integrals (§5.5). Calendar features crowded out the weather (§5.6). And v11 removed the outdoor-lux stage and replaced the constant attenuation with a measured ratio. Doing so removed a seasonal swing of up to +5 mol/m²/day (§5.7).
 
 ## 1. Introduction
 
@@ -24,10 +21,11 @@ The challenge: We want to predict indoor Photosynthetically Active Radiation (PA
 
 | Source | Variables | Resolution | Role |
 |--------|-----------|------------|------|
-| OpenMeteo API | direct_radiation, diffuse_radiation, cloud_cover | Hourly | Predictor (available for forecasts) |
-| s1000 Weather Station | lux | ~10 min | Intermediate target / local calibration |
-| s2100-01-par | PAR (μmol/m²/s), above lamps | ~10 min | Stage 2 training target (natural light) |
-| s2100-02-par | PAR (μmol/m²/s), under lamps | ~10 min | Attenuation validation (natural + lamp) |
+| OpenMeteo API | shortwave_radiation (+ hourly shape for the intraday curve) | Hourly | Predictor (available for forecasts) |
+| s2100-01-par | PAR (μmol/m²/s), above lamps | ~10 min | Training target (natural light) |
+| s2100-02-par | PAR (μmol/m²/s), under lamps | ~10 min | Canopy/roof ratio, lamp level, and what pages score against |
+| LetsGrow (`lg_assim_light_on`, `lg_assim_light_pct`) | Lamp switch and share | 5 min, ~2 days late | When the lamps ran |
+| s1000 weather station | lux | ~10 min | **No longer used** (v4–v10 intermediate target; §5.7) |
 
 ## 2. Sensor Configuration & Investigation
 
@@ -69,79 +67,77 @@ This condition-dependent ratio made direct training on s2100-02 problematic — 
 
 ## 3. Model Architecture
 
-### 3.1 Why Two Stages
-
-A single-stage model (OpenMeteo → Indoor PAR) achieves poor performance because it must simultaneously learn:
-1. How global weather data maps to local conditions
-2. How outdoor light transmits through the greenhouse structure
-
-By decomposing into two stages, each model learns a simpler, more interpretable relationship:
+### 3.1 Two links, and the lamps beside them
 
 ```
-┌─────────────┐     Stage 1     ┌─────────────┐     Stage 2     ┌─────────────┐    ×atten.   ┌─────────────┐
-│  OpenMeteo   │ ─────────────► │    s1000     │ ─────────────► │ s2100-01-par│ ──────────► │ Plant-Level │
-│  Weather     │  Ridge CV      │   Outdoor    │  Ridge CV      │ (above lamp)│   ×factor    │  Estimate   │
-│  Forecast    │                │   Lux        │                │             │             │             │
-└─────────────┘                 └─────────────┘                 └─────────────┘             └─────────────┘
+┌────────────┐   Ridge (daily)   ┌──────────────┐  × canopy/roof ratio  ┌──────────────┐
+│ OpenMeteo  │ ────────────────► │ s2100-01-par │ ────────────────────► │  natural at  │
+│ shortwave  │                   │ (above lamps)│  measured, rolling    │  the canopy  │
+└────────────┘                   └──────────────┘                       └──────┬───────┘
+                                                                               │ +
+                                          LetsGrow: lamps as they ran (past) ──┤
+                                          or their last 3 days' pattern (ahead)│
+                                                                               ▼
+                                                                     total at the canopy
 ```
 
-**Benefits:**
-- Each stage is interpretable (weather calibration vs. transmission vs. attenuation)
-- Errors can be diagnosed to specific stages
-- Stage 1 could be reused for other outdoor predictions
-- Stage 2 captures greenhouse-specific transmission
-- Attenuation factor is physically meaningful and independently verifiable
+The split follows what drives each part:
 
-### 3.2 Stage 1: Weather API Calibration
+- **Weather → roof** is physics with noise, so it is fitted. The above-lamp
+  sensor is the clean target: no lamp light, no crop shading it (§5.4).
+- **Roof → canopy** is a ratio that moves with the season and the crop (§3.3),
+  so it is measured rather than fitted once.
+- **The lamps** are an operator's decision, which LetsGrow records. Recent
+  behaviour predicts them better than any weather regression could.
 
-**Purpose:** Translate global weather model predictions to local ground-truth measurements.
+### 3.2 Link 1: weather → light above the lamps
 
-**Input Features:**
-- `direct_radiation_sum` - Daily sum of direct solar radiation (W/m²)
-- `diffuse_radiation_sum` - Daily sum of diffuse/scattered radiation (W/m²)
-- `cloud_cover_avg` - Daily average cloud cover (%)
-- `day_of_year_sin`, `day_of_year_cos` - Cyclical seasonal encoding
+**Feature:** `shortwave_sum`, the daily sum of OpenMeteo's global horizontal
+irradiance, and nothing else (§5.6, §5.7).
 
-**Output:** Predicted daily lux sum from the s1000 outdoor weather station.
+**Target:** the daily PAR **integral** at `s2100-01-par`, in μmol/m² (§5.5).
 
-**Rationale:** OpenMeteo provides modeled radiation values that may differ from actual ground measurements due to local terrain, microclimate, or model biases. This stage learns the systematic offset.
+**Fit:** `RidgeCV` on standardised features, scored out of fold on day-blocked
+folds (`red/fitting.py`). Refitted nightly on prod and at boot when the stored
+artifact's version or fingerprint differs (root ADR 0007). Why the model is
+shaped this way: red [ADR 0005](../docs/adr/0005-dli-model-one-fit-and-measured-ratio.md).
 
-### 3.3 Stage 2: Roof Transmission
+### 3.3 Link 2: the canopy/roof ratio
 
-**Purpose:** Model how outdoor light transmits through the greenhouse roof to the above-lamp sensor.
+The share of natural light that reaches the canopy sensor. Per day:
 
-**Input Features:**
-- `lux_sum` - Daily outdoor lux (from Stage 1 prediction or actual s1000)
-- `day_of_year_sin`, `day_of_year_cos` - Cyclical seasonal encoding
+```
+ratio = (canopy − lamp) / roof        (daily integrals)
+```
 
-**Output:** Predicted daily above-lamp PAR sum (μmol/m²) at s2100-01-par position.
+`lamp` is what `red.lamp.observed_lamp_par` says ran: LetsGrow's switch × the
+lamp level measured on dark hours. The ratio is the **median over 14 days**
+(`red.lamp.attenuation_by_date`). Days outside (0, 1] are dropped, because there
+the lamp estimate was wrong. A window needs at least 5 days before it says
+anything.
 
-**Training target:** s2100-01-par — the sensor above the lamps that sees only natural light. This is key: it provides a clean signal free of lamp contamination.
+Which window depends on what is being predicted:
 
-**Rationale:** Greenhouse transmission varies with:
-- Sun angle (captured by day-of-year features)
-- Glass/covering transmissivity
-- Structural shading patterns
+| Use | Window | Why |
+|---|---|---|
+| `/dli/forecast`, days ahead | the newest 14 days | the latest thing known |
+| `/dli/forecast` and `/dli/performance`, past days | 14 days ending **3 days before** each day | what a forecast would have known: nothing from today, and LetsGrow lands ~2 days late |
+| a day with no ratio (sensor outage) | the model's fitted `attenuation_factor` | `compute_attenuation` over the whole training range |
 
-### 3.4 Attenuation Factor
+Over Oct 2025 – Nov 2026 the ratio ran from **~0.4 in February to 0.7–0.8 in
+autumn**. The likely cause is the crop growing over the canopy sensor after each
+rotation, plus screens. LetsGrow reports no screen position, so screens cannot
+be checked directly.
 
-**Purpose:** Convert above-lamp PAR prediction to plant-level estimate.
+### 3.4 The lamps
 
-The attenuation factor represents the ratio of lamp-corrected plant-level light to above-lamp light. It captures structural attenuation from lamps, fixtures, and other obstacles between the roof sensor and plant canopy.
-
-**Why a constant factor works:**
-- The rolling median of daily attenuation ratios is stable over time
-- The ratio is computed from lamp-corrected data only, eliminating artificial light contamination
-- Initial median ≈ 0.622, but this includes days where leaves partially occlude the plant-level sensor, dragging the median down
-
-**Computation:**
-1. Derive daily lamp profile from s2100-01 (daylight detection) and s2100-02 (lamp power from pre-sunrise/post-sunset readings)
-2. Subtract lamp contribution from s2100-02 readings to get natural-only plant-level PAR
-3. Compute daily ratio: corrected_plant_daily / above_lamp_daily
-4. Use median of filtered days as the constant factor
-5. Days >2σ below rolling median are flagged as occlusion events (excluded from median)
-
-**Observation: 0.622 underestimates on high-light days.** Testing with 0.8 produced better predictions on days with strong natural light peaks. The likely cause: the current >2σ outlier filter is too conservative — many days with partial leaf occlusion still pass the filter and pull the median down. More aggressive filtering of low-ratio days (e.g., a minimum ratio threshold or tighter σ cutoff) should bring the computed median closer to the true structural attenuation, without the plant canopy effect. This is a planned improvement.
+- **Days that have happened:** as they ran. LetsGrow's hourly on-fraction
+  (share/100 while switched on, averaged in SQL by
+  `red.tsdb.fetch_lamp_on_fraction`) × the level from `lamp_level_by_date`.
+  Hours after LetsGrow's last delivery fall back to the PAR-sensor detector.
+- **Hours ahead:** the per-hour **median of LetsGrow's last 3 complete days**,
+  at the latest level (§5.7). A short median keeps the switch-on edge sharp, and
+  it follows a schedule that moves week by week.
 
 ## 4. Design Choices
 
@@ -160,30 +156,25 @@ We train on **daily aggregates** rather than hourly data.
 - DLI is inherently a daily metric — we care about total light per day
 - Fewer samples but much higher signal-to-noise ratio
 
-### 4.2 Cyclical Day-of-Year Encoding
+### 4.2 Cyclical Day-of-Year Encoding (v5–v10, not in v11)
 
-We encode day-of-year as sine/cosine pairs rather than a linear feature:
+Day-of-year was encoded as a sine/cosine pair, so that day 1 and day 365 are
+adjacent:
 
 ```python
 day_of_year_sin = sin(2π × day / 365)
 day_of_year_cos = cos(2π × day / 365)
 ```
 
-**Justification:**
-- Day 1 and day 365 are adjacent (winter), but linear encoding treats them as maximally distant
-- Sine/cosine encoding preserves cyclical continuity
-- Two features capture both position in cycle and rate of change
-- Standard practice in time series ML
+It was dropped from stage 1 in v9 (§5.6). In v11 it was tried on the single fit
+and scored worse (§5.7). The season's effect on the light reaching the canopy
+is now the measured ratio's job, not a calendar term's.
 
-### 4.3 Direct + Diffuse Radiation
+### 4.3 Direct + Diffuse Radiation (superseded)
 
-We use both direct and diffuse radiation rather than just total shortwave.
-
-**Justification:**
-- Direct radiation comes from the sun's disk; diffuse is scattered by atmosphere
-- They have different transmission characteristics through glass
-- On cloudy days, diffuse dominates; on clear days, direct dominates
-- Separating them gives the model more information to work with
+Beam and diffuse radiation transmit through glass differently, so earlier
+versions fed them separately. Measured, a single global-horizontal sum did as
+well or better at every stage (§5.6). v11 uses **shortwave alone**.
 
 ### 4.4 Ridge Regression with Cross-Validation
 
@@ -206,9 +197,11 @@ We use `RidgeCV` rather than ordinary least squares (OLS) or other models.
 - Polynomial features were tested but caused overfitting (see Section 5.3)
 
 **Cross-Validation:**
-- `RidgeCV` tests alphas [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]
-- 5-fold CV selects optimal regularization strength automatically
-- Prevents manual tuning and adapts to data characteristics
+- `RidgeCV` selects the regularization strength over a log-spaced alpha grid
+- Folds are **day-blocked**, never random: consecutive days share a weather
+  system, so a random split trains on the test day's neighbours and flatters
+  every score
+- The same folds give the out-of-fold scores in §6
 
 ### 4.5 Feature Scaling
 
@@ -251,7 +244,7 @@ All features are standardized (zero mean, unit variance) before Ridge regression
 
 **Lesson:** At small sample sizes, model complexity is the enemy. Linear models with regularization outperform complex models that memorize training noise.
 
-### 5.4 Retargeting to s2100-01-par (Current — v7)
+### 5.4 Retargeting to s2100-01-par (v7, still the target in v11)
 
 **Approach:** Train Stage 2 on s2100-01-par (above-lamp, natural light only), then apply a constant attenuation factor to reach plant-level estimates.
 
@@ -261,7 +254,7 @@ All features are standardized (zero mean, unit variance) before Ridge regression
 - Splitting transmission and attenuation into separate steps matches physical reality
 - The attenuation factor can be independently validated against the ratio time series
 
-**Result:** This is the current production model with the best real-world prediction accuracy.
+**Result:** The above-lamp sensor has been the training target ever since. The constant attenuation factor was replaced in v11 by a measured, rolling ratio (§5.7).
 
 ### 5.5 Summing readings instead of integrating time (bug, fixed — v10)
 
@@ -359,8 +352,13 @@ fold, with the lamps as LetsGrow ran them. Daily total-DLI MAE:
   so hardware was never the limit. Revisit with 2–3 seasons.
 - **Lamp pattern for the forecast:** per-hour median of LetsGrow's last 3
   complete days (lamp-hours/day MAE 1.40), not the 14-day mean share (1.91),
-  which smeared the moving switch-on time into a ramp. Past hours on the
-  forecast page use the lamps as they ran.
+  which smeared the moving switch-on time into a ramp. The last day alone
+  scored 1.29, but one odd day (a fault, a manual override) would then set
+  tomorrow. Past hours on the forecast page use the lamps as they ran; one
+  pattern for the whole range had drawn November's lamps onto a summer week.
+- **On the live page:** `/dli/performance`, total, 1 Oct 2025 – 22 Nov 2026:
+  bias +1.60 → **+0.34** mol/m²/day, mean absolute error 2.79 → 2.69, mean
+  absolute % error 43.3% → 39.8%.
 
 ## 6. Performance
 
@@ -375,15 +373,21 @@ to show what the gap was.
 | v5-v7 | 0.786* | 0.914* | 0.719* | *in-sample; chain was the product of the two |
 | v8 | −0.036 | 0.977 | 0.655 | first out-of-fold scores; chain measured, not derived |
 | v9 | 0.213 | 0.977 | 0.805 | stage 1 loses its day-of-year term (§5.6) |
-| **v10** | **0.917** | **0.978** | **0.926** | daily totals are time integrals (§5.5) |
+| v10 | 0.917 | 0.978 | 0.926 | daily totals are time integrals (§5.5) |
+| **v11** | — | — | **0.950** | one fit, weather → above-lamp PAR; s1000 removed (§5.7) |
 
-Skill against the baselines, v10, out-of-fold:
+For v11 the "chain" column is the single fit's out-of-fold R² (338 days,
+1 Nov 2025 – 24 Nov 2026). There is no longer a stage to score separately.
 
-| Stage | vs persistence | vs climatology |
+Skill against the baselines, out-of-fold, weather → above-lamp PAR:
+
+| Version | vs persistence | vs climatology |
 |---|---|---|
-| 1 — weather → s1000 lux | +0.532 | +0.684 |
-| 2 — lux → indoor PAR | +0.735 | +0.829 |
-| **chain — weather → indoor PAR** | **+0.517** | **+0.688** |
+| v10 chain (via s1000 lux) | +0.517 | +0.688 |
+| **v11 single fit** | **+0.605** | **+0.742** |
+
+For reference, v10's stages on their own: stage 1 (weather → s1000 lux) +0.532 /
++0.684, stage 2 (lux → indoor PAR) +0.735 / +0.829.
 
 At v7 the chain was level with "same as yesterday" (−0.018 against persistence)
 while reporting a combined R² of 0.719. The product was never a bound on
@@ -405,9 +409,9 @@ brightest days:
 | **v10 (+ time integrals)** | **−12.3%** | **18.9%** |
 
 A residual compression remains — the model still underpredicts the top of the
-range and overpredicts the bottom. Stage 2 is now the place to look: it is linear
-in lux, and the brightest days are where a linear transmission model has least
-room.
+range and overpredicts the bottom. Since v11 the fit is a single linear map from
+shortwave to roof PAR, so this is where to look next. It sits under the larger,
+day-to-day error of OpenMeteo's sun against the greenhouse's own (§7.5).
 
 ### 6.3 Correlation Analysis
 
@@ -419,42 +423,67 @@ room.
 ## 7. Limitations
 
 ### 7.1 Sample Size
-- ~317 days for stage 1 and ~271 for stage 2 (training starts 2025-11-01)
-- Still thin for anything richer than a regularised linear fit; §5.3's
-  polynomial failure was at 88 days, and the margin has not grown much
-- One full year of seasonal coverage, no more: nothing here has been validated
-  against a second spring
+- 338 days of training (from 2025-11-01), one full seasonal cycle and no more
+- Too few for anything richer than a regularised linear fit: 12-feature Ridge
+  and boosted trees did no better or worse out of fold (§5.7). A flexible model
+  cannot learn a March it has held out when there is only one March
+- Revisit with 2–3 seasons; fitting takes under two seconds, so compute is not
+  the constraint
 
 ### 7.2 Sensor Specificity
-- Model is trained for specific sensor positions
-- Different greenhouse locations would need recalibration
-- Assumes consistent sensor operation (no drift, no obstructions)
+- Fitted to these sensor positions. The canopy sensor most likely moved at the
+  July 2026 crop rotation: the lamp level fell from 188 to 140 µmol/m²/s with
+  the lamps at 100%. The rolling level and ratio absorb such a move within a
+  window; a fitted constant would not
+- Another greenhouse would need its own fit and its own ratio
 
-### 7.3 Attenuation Factor Sensitivity
-- Current >2σ outlier filter is too conservative — many partial-occlusion days pass and drag the median down (0.622 vs ~0.8 observed as better fit on high-light days)
-- Next step: more aggressive filtering of low-ratio days (minimum ratio threshold or tighter σ) to isolate the true structural attenuation from canopy interference
-- May need periodic recalibration as growing conditions change
+### 7.3 The canopy/roof ratio
+- **Trailing windows lag.** A step in the ratio takes up to a week to show in the
+  forecast's 14-day median
+- **Winter ratios are noisy.** On a dull winter day the canopy is mostly lamp, so
+  the day's ratio is mostly the lamp estimate's error. The median and the (0, 1]
+  gate contain this; they do not remove it
+- **Needs both PAR sensors and LetsGrow.** Without them the fitted constant
+  stands in, with the seasonal error it brings (§5.7)
+- The ratio follows the *sensor*, not necessarily the crop: if the crop shades
+  the canopy sensor, the predicted canopy DLI is what that sensor would read
 
-### 7.4 No Lamp Modeling
-- Model predicts natural light only
-- Supplemental lamp contribution is inferred separately from historical data
-- Lamp schedule changes require re-inference
+### 7.4 Lamps
+- **Ahead of now, the forecast assumes the last 3 days repeat.** It does not
+  predict the grower switching lamps off in bright sun. Inside the lit period,
+  9% of daytime hours with the roof at 400–600 µmol/m²/s had the lamps off,
+  and 20% above 600; below 200, none did. A radiation-aware
+  share was measured to cut lamp-DLI MAE from 1.29 to 1.11 in autumn
+  (issue 075); not adopted yet
+- **LetsGrow gaps:** where LetsGrow has no data (its two-day delivery lag, or the
+  outage of 26 Oct – 2 Nov 2026), the PAR detector stands in. It cannot see
+  lamps under a bright sun
 
 ### 7.5 Weather Forecast Accuracy
-- Stage 1 calibration cannot correct for weather forecast errors
+- **Now the largest error.** OpenMeteo's daily shortwave misses the greenhouse's
+  sun by an MAE of ~3 mol/m²/day above the lamps. LetsGrow's own radiation
+  sensor gets ~2.2, but only for days that have happened
 - Prediction accuracy degrades with forecast horizon
-- Model trained on historical (actual) weather, applied to forecasts
+- Fitted on OpenMeteo's historical weather and served its forecasts, which are
+  less accurate than the history
 
 ## 8. Conclusion
 
-The two-stage architecture with post-hoc attenuation successfully decomposes a complex prediction problem into physically interpretable components. The key insight from our sensor investigation is that **training on the cleanest signal (above-lamp) and applying a constant attenuation factor outperforms training on the noisier plant-level signal directly** — even with lamp correction. This is because the above-lamp sensor avoids both lamp contamination and plant canopy occlusion, producing a training signal that better represents the physical relationship between outdoor and indoor natural light.
+Training on the cleanest signal, the above-lamp sensor, still holds (§5.4). What
+v11 changed is everything around that fit:
+- an intermediate stage that added error but no information is gone;
+- a constant that hid a seasonal swing is replaced by a measured, rolling ratio;
+- the lamps are read from the system that switches them, not inferred.
 
-By aggregating to daily resolution and using regularized linear regression, we achieve robust predictions despite limited training data. The model's simplicity is a feature, not a bug — it generalizes well and provides interpretable coefficients that can be validated against physical intuition.
+The model has *fewer* fitted parameters than v10, and it is more accurate day to
+day.
 
-**Data quality beats model complexity at small sample sizes.**
+**Data quality beats model complexity at small sample sizes**, and v11 adds a
+second lesson: **where a quantity can be measured as it moves, measure it rather
+than fitting it once.**
 
 ---
 
-*Model Version: 10 (time-integrated daily totals, no seasonal term in stage 1)*
-*Results above measured 2026-09-18*
-*Data Range: November 2025 – February 2026*
+*Model Version: 11 (one weather fit to above-lamp PAR, rolling canopy/roof ratio, lamps from LetsGrow)*
+*v11 results measured 2026-11-24; §6.2 measured 2026-09-18*
+*Data Range: November 2025 – November 2026*
