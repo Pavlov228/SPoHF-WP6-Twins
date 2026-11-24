@@ -360,6 +360,48 @@ fold, with the lamps as LetsGrow ran them. Daily total-DLI MAE:
   bias +1.60 → **+0.34** mol/m²/day, mean absolute error 2.79 → 2.69, mean
   absolute % error 43.3% → 39.8%.
 
+### 5.8 Where the forecast's error comes from (measured, not shipped)
+
+A diagnostic replay, not a page: the model's structure fed what the greenhouse
+measured on the day, to see which forecast input costs the most. LetsGrow has no
+forecast, so this cannot replace OpenMeteo; `/dli/performance` benchmarks on
+OpenMeteo, as the forecast runs.
+
+- **Weather:** LetsGrow's outdoor radiation sensor (`lg_rad`, W/m², daily mean
+  over days with 22+ reported hours) × one slope to the above-lamp sensor,
+  fitted over the same days as the weather link: **0.193** mol/m²/day per W/m².
+- **Ratio:** the centred canopy/roof ratio, from around each day rather than
+  before it.
+
+Replayed out of fold (333–336 days, 1 Oct 2025 – 22 Nov 2026, lamps as run),
+daily total-DLI MAE:
+
+| | trailing ratio (as forecast) | centred ratio |
+|---|---|---|
+| OpenMeteo | 2.71 | 2.16 |
+| LetsGrow radiation | 2.56 | 1.92 |
+| measured roof (floor, §5.7) | | 1.35 |
+
+- **The ratio's lag costs more than the weather:** 0.55–0.64 against
+  0.15–0.24. At the roof OpenMeteo is clearly worse than the greenhouse's
+  sensor (MAE ~2.9 vs ~2.2 mol/m²/day), but at the canopy that is scaled by a
+  ratio of ~0.6 and partly cancels against ratio errors. Part of the centred
+  ratio's gain is a mild leak: its 14 days include the day being scored.
+- **Link 1 has a season the ratio cannot see.** Per month the radiation → roof
+  factor runs from 0.144 (December) and 0.154 (November) to 0.199 (July), most
+  likely the roof glass and structure at a low sun. A year-wide fit is dominated
+  by bright summer days, so it overshoots the roof by up to a quarter in
+  midwinter. The OpenMeteo fit has the same one-coefficient shape, so it carries
+  the same error, and the ratio, taken against the *measured* roof, passes it
+  straight through. (The leave-one-month-out slope moves only 0.192–0.194: the
+  year-wide fit is stable, it is just the wrong shape.)
+- **What to do about it:** take the ratio against the *predicted* roof light, so
+  it absorbs link 1's season as well. Replayed: forecast MAE 2.71 → 2.60, worst
+  month +1.4 → +1.0. Filed as issue 076; not adopted yet.
+- **Considered and dropped:** shipping this as an opt-in "measured inputs" view
+  on `/dli/performance`. It is a second, unforecastable prediction beside the
+  real one, and the finding above is all it had to say.
+
 ## 6. Performance
 
 ### 6.1 Version Evolution
@@ -438,13 +480,17 @@ day-to-day error of OpenMeteo's sun against the greenhouse's own (§7.5).
 - Another greenhouse would need its own fit and its own ratio
 
 ### 7.3 The canopy/roof ratio
-- **Trailing windows lag.** A step in the ratio takes up to a week to show in the
-  forecast's 14-day median
+- **Trailing windows lag, and that is the forecast's largest canopy error.** A
+  step in the ratio takes up to a week to show in the forecast's 14-day median;
+  replacing it with the centred one saves more than perfect weather does (§5.8)
 - **Winter ratios are noisy.** On a dull winter day the canopy is mostly lamp, so
   the day's ratio is mostly the lamp estimate's error. The median and the (0, 1]
   gate contain this; they do not remove it
 - **Needs both PAR sensors and LetsGrow.** Without them the fitted constant
   stands in, with the seasonal error it brings (§5.7)
+- **It does not cover link 1's season.** The ratio is canopy over *measured*
+  roof, so the weather link's own seasonal miss (one coefficient for a roof
+  that transmits ~25% less at a December sun) passes straight through (§5.8)
 - The ratio follows the *sensor*, not necessarily the crop: if the crop shades
   the canopy sensor, the predicted canopy DLI is what that sensor would read
 
@@ -460,9 +506,11 @@ day-to-day error of OpenMeteo's sun against the greenhouse's own (§7.5).
   lamps under a bright sun
 
 ### 7.5 Weather Forecast Accuracy
-- **Now the largest error.** OpenMeteo's daily shortwave misses the greenhouse's
+- **The largest error above the lamps.** OpenMeteo's daily shortwave misses the greenhouse's
   sun by an MAE of ~3 mol/m²/day above the lamps. LetsGrow's own radiation
   sensor gets ~2.2, but only for days that have happened
+- **At the canopy it is not the largest.** There the ratio's 3-day lag costs
+  more than the weather (§5.8)
 - Prediction accuracy degrades with forecast horizon
 - Fitted on OpenMeteo's historical weather and served its forecasts, which are
   less accurate than the history
@@ -485,5 +533,5 @@ than fitting it once.**
 ---
 
 *Model Version: 11 (one weather fit to above-lamp PAR, rolling canopy/roof ratio, lamps from LetsGrow)*
-*v11 results measured 2026-11-24; §6.2 measured 2026-09-18*
+*v11 results and §5.8 measured 2026-11-24; §6.2 measured 2026-09-18*
 *Data Range: November 2025 – November 2026*

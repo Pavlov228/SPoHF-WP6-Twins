@@ -65,10 +65,11 @@ Measured over the 339 days with a canopy sensor, out of fold, lamps as they ran
   The ratio needs both PAR sensors and LetsGrow. Without them it falls back to
   the constant and its seasonal error.
 - **A trailing ratio lags a real change by up to a week.**
-- **The largest remaining error is OpenMeteo's sun against the greenhouse's own:**
-  ~3 mol/m²/day above the lamps. LetsGrow's radiation sensor gets ~2.2, but only
-  for past days. That is the planned "measured inputs" view on
-  `/dli/performance`.
+- **Above the lamps, the largest remaining error is OpenMeteo's sun against the
+  greenhouse's own:** ~3 mol/m²/day; LetsGrow's radiation sensor gets ~2.2, but
+  only for past days. **At the canopy the ratio's lag costs more than the
+  weather** (MODEL_PAPER §5.8): ~0.6 mol/m²/day against ~0.2. Taking the ratio
+  against the predicted roof light is issue 076.
 - s1000 is no longer a DLI input. It stays in `metadata.yaml`, on the model
   diagnostic page's raw counts, and in the climate model, whose link 1 still targets it.
 
