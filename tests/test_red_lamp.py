@@ -25,12 +25,10 @@ from wp6_data.red.lamp import (
     MIN_RATIO_DAYS,
     RECENT_DAYS,
     LampModel,
-    LampState,
     attenuation_by_date,
     compute_attenuation,
     derive_lamp_model,
     lamp_level_by_date,
-    lamp_state_grid,
     load_lamp_status,
     observed_lamp_par,
 )
@@ -332,25 +330,6 @@ class TestDaytimeLampDetection:
         lamp_dli = sum(schedule.values()) * SECONDS_PER_HOUR / UMOL_TO_MOL
 
         assert lamp_dli == pytest.approx(len(lit) * self.LAMP * SECONDS_PER_HOUR / UMOL_TO_MOL)
-
-
-class TestLampStateGridOverlap:
-    def test_daylight_hours_with_lamps_get_their_own_state(self):
-        lit = set(range(0, 16)) | {23}
-        above, canopy = TestDaytimeLampDetection()._day(lit, days=20)
-
-        by_hour = lamp_state_grid(above, canopy).set_index("hour")["state"].to_dict()
-
-        assert by_hour[12] == LampState.DAYLIGHT_LIT   # sun and lamps together
-        assert by_hour[3] == LampState.LIT             # lamps alone
-
-    def test_a_lamp_free_day_has_no_lamp_states(self):
-        above, canopy = TestDaytimeLampDetection()._day(set(), days=20)
-
-        states = set(lamp_state_grid(above, canopy)["state"])
-
-        assert LampState.DAYLIGHT_LIT not in states
-        assert LampState.LIT not in states
 
 
 # ── Lamp state from LetsGrow ─────────────────────────────────────────────────

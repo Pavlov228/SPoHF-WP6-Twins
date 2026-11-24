@@ -383,98 +383,105 @@ class LampState(IntEnum):
     daylight, then the two lamp states on top.
     """
 
-    DARK = 1              # no daylight reaching the greenhouse, and no lamp either
-    DAYLIGHT_UNKNOWN = 2  # sun, and nothing that can say whether the lamps ran
-    DAYLIGHT = 3          # sun, and the lamps are off
-    DAYLIGHT_LIT = 4      # sun *and* lamps — winter's supplementary lighting
-    LIT = 5               # canopy is bright while the above-lamp sensor is dark: lamps
+    DARK = 1          # no sunlight outside, and the lamps off
+    DAYLIGHT = 2      # sun, and the lamps off
+    DAYLIGHT_LIT = 3  # sun *and* lamps — winter's supplementary lighting
+    LIT = 4           # lamps alone
+
+
+LAMP_STATES = frozenset({LampState.LIT, LampState.DAYLIGHT_LIT})
+
+
+def radiation_without_frozen_hours(stats: pd.DataFrame) -> pd.Series:
+    """Hourly mean radiation, minus the hours the sensor was stuck.
+
+    ``stats`` is one row per hour with ``mean``, ``min`` and ``max``
+    (``red.tsdb.fetch_hourly_stats``). An hour whose readings are all the same
+    **non-zero** value is a frozen sensor, not sunlight: real light, logged in
+    whole W/m², moves within an hour. LetsGrow's station froze at 146 W/m² for
+    27 hours on 8-9 June 2026, which drew a sunlit night; over Oct 2025 - Nov
+    2026 no other hour was flat and non-zero. Flat *zero* is just night.
+
+    Frozen hours are dropped, so they read as gaps rather than as either verdict.
+    """
+    if stats.empty:
+        return pd.Series(dtype=float)
+    frozen = (stats["min"] == stats["max"]) & (stats["min"] > 0)
+    return stats.loc[~frozen, "mean"]
 
 
 def lamp_state_grid(
-    above_lamp_df: pd.DataFrame,
-    canopy_df: pd.DataFrame,
-    on_fraction: pd.Series | None = None,
+    radiation: pd.Series,
+    on_fraction: pd.Series,
+    daylight_threshold: float,
 ) -> pd.DataFrame:
-    """One row per observed hour: which state it was in, and the readings behind it.
+    """One row per hour LetsGrow reported both: which state it was in, and why.
 
-    The same two-sensor test :func:`derive_lamp_model` uses to measure the lamps,
-    exposed per hour so it can be looked at rather than trusted. Hours where
-    either sensor is silent are **absent** from the frame, so a reader can tell a
-    dark greenhouse from a dead sensor.
+    Both inputs are LetsGrow's, hourly and UTC-indexed: ``radiation`` is the
+    outdoor weather station's mean W/m² (see ``DaylightConfig``), ``on_fraction``
+    the lamps' share of the hour (``red.tsdb.fetch_lamp_on_fraction``). LetsGrow
+    switches the lamps, so their state is the record, never inferred; the sun is
+    up when the hour's radiation is above ``daylight_threshold``.
 
-    Sunlit hours the lamps were also running are marked ``DAYLIGHT_LIT``. Red
-    runs its lamps through the short winter day, so without that distinction a
-    winter schedule reads as about half its real length.
+    Read off LetsGrow rather than red's own PAR sensors because LetsGrow goes
+    back to 2023 and the sensors to late 2025 — and an outdoor sensor answers
+    "is the sun up" without lamp spill: the roof PAR sensor hangs just above the
+    lamps and reads twilight-level light on lamp-lit nights.
 
-    Days whose above-lamp sensor saw less than ``MIN_INDOOR_PAR`` in total are
-    **dropped**, because a sensor that is switched off or out of the greenhouse
-    reports zeros rather than nothing, and zeros are indistinguishable from a
-    dark greenhouse once they reach a chart. Red's PAR sensors were out for six
-    weeks in summer 2026, which would otherwise draw as solid midsummer night.
-    The same gate the model's training uses, and it separates cleanly: the
-    dimmest real December day still reads 25x it.
+    Hours missing from either series are **absent**, so a LetsGrow outage reads
+    as a gap rather than as dark.
 
-    With ``on_fraction`` (LetsGrow's hourly share, see
-    ``red.tsdb.fetch_lamp_on_fraction``), every hour LetsGrow reported takes
-    its on/off from the switch itself, and only the daylight/dark split comes
-    from the roof sensor. Hours after its last delivery, or with no LetsGrow
-    at all, keep the sensor reading. ``source`` says which applied, per hour.
-
-    The sensors' verdict is trusted where it is sound: at night canopy light can
-    only be the lamps, and in daylight a canopy brighter than the roof shows
-    them too. What they cannot do is rule the lamps *out* in daylight — 140 µmol
-    of lamp vanishes next to a bright sun — so a sunlit hour with no LetsGrow and
-    no lamp seen is ``DAYLIGHT_UNKNOWN``, not ``DAYLIGHT``. Without that, a
-    LetsGrow outage draws as a week of lamps switched off at midday.
-
-    Returns ``date, hour, state, above_par, canopy_par, source``.
+    Returns ``date, hour, state, radiation, on_fraction``.
     """
-    columns = ["date", "hour", "state", "above_par", "canopy_par", "source"]
-    if above_lamp_df.empty or canopy_df.empty:
-        return pd.DataFrame(columns=columns)
-
-    above = _hourly(above_lamp_df)
-    canopy = _hourly(canopy_df)
-    joined = pd.concat([above.rename("above_par"), canopy.rename("canopy_par")], axis=1).dropna()
+    columns = ["date", "hour", "state", "radiation", "on_fraction"]
+    joined = pd.concat(
+        [radiation.rename("radiation"), on_fraction.rename("on_fraction")],
+        axis=1, join="inner", sort=True,
+    ).dropna()
     if joined.empty:
         return pd.DataFrame(columns=columns)
 
-    # Drop days the above-lamp sensor was not really measuring (see docstring).
-    measuring = joined.groupby(joined.index.date)["above_par"].transform("sum")
-    joined = joined[measuring > _min_indoor_par()]
-    if joined.empty:
-        return pd.DataFrame(columns=columns)
+    sun = (joined["radiation"] > daylight_threshold).to_numpy()
+    lamps = (joined["on_fraction"] >= LIT_HOUR_SHARE).to_numpy()
 
-    is_daylight = (joined["above_par"] >= DAYLIGHT_THRESHOLD).to_numpy()
-    detected = _lit_mask(
-        joined.rename(columns={"above_par": "above", "canopy_par": "canopy"})
-    )
-    lamps_on, from_letsgrow = detected, np.zeros(len(joined), dtype=bool)
-    if on_fraction is not None and not on_fraction.empty:
-        reported = on_fraction.reindex(joined.index)
-        from_letsgrow = reported.notna().to_numpy()
-        lamps_on = np.where(from_letsgrow, reported.fillna(0.0) >= LIT_HOUR_SHARE, detected)
-
-    grid = joined.reset_index()
+    grid = joined.rename_axis("time").reset_index()
     grid["date"] = grid["time"].dt.date
     grid["hour"] = grid["time"].dt.hour
     grid["state"] = np.select(
-        [
-            lamps_on & ~is_daylight,
-            lamps_on & is_daylight,
-            is_daylight & from_letsgrow,
-            is_daylight,
-        ],
-        [
-            int(LampState.LIT),
-            int(LampState.DAYLIGHT_LIT),
-            int(LampState.DAYLIGHT),
-            int(LampState.DAYLIGHT_UNKNOWN),
-        ],
+        [lamps & ~sun, lamps & sun, sun],
+        [int(LampState.LIT), int(LampState.DAYLIGHT_LIT), int(LampState.DAYLIGHT)],
         default=int(LampState.DARK),
     )
-    grid["source"] = np.where(from_letsgrow, LAMP_SOURCE_LETSGROW, LAMP_SOURCE_SENSORS)
     return grid[columns]
+
+
+def daily_light_hours(grid: pd.DataFrame) -> pd.DataFrame:
+    """Per day: how many hours the lamps ran, and how many were lit at all.
+
+    Built from :func:`lamp_state_grid`. ``light_hours`` counts every hour that
+    was not dark — sun, lamps or both — so it is the crop's photoperiod;
+    ``lamp_hours`` counts the hours the lamps ran, with or without sun.
+
+    Only **complete days** are kept: the grid leaves out hours LetsGrow did not
+    report, and a day missing its night or its noon would draw as a schedule
+    change.
+
+    Returns ``date, lamp_hours, light_hours``.
+    """
+    columns = ["date", "lamp_hours", "light_hours"]
+    if grid.empty:
+        return pd.DataFrame(columns=columns)
+
+    state = grid["state"]
+    flags = pd.DataFrame({
+        "date": grid["date"],
+        "lamp_hours": state.isin([int(s) for s in LAMP_STATES]),
+        "light_hours": state != int(LampState.DARK),
+        "observed": True,
+    })
+    daily = flags.groupby("date").sum()
+    daily = daily[daily["observed"] == 24]
+    return daily.drop(columns="observed").astype(int).reset_index()[columns]
 
 
 def _lit_mask(joined: pd.DataFrame) -> np.ndarray:
@@ -836,6 +843,27 @@ def load_lamp_status(yaml_path: Path) -> LampStatusConfig:
     if "lamps" not in raw:
         raise ValueError(f"no 'lamps' block in {yaml_path}")
     return LampStatusConfig(**raw["lamps"])
+
+
+class DaylightConfig(BaseModel):
+    """Where LetsGrow reports outdoor sunlight, from ``metadata.yaml``'s ``daylight``."""
+
+    device: str
+    radiation: str  # sensor tag: global radiation, W/m²
+    # An hour is sunlit when its mean radiation is above this, in W/m².
+    threshold: float
+
+
+def load_daylight(yaml_path: Path) -> DaylightConfig:
+    """The ``daylight`` block of red's metadata. Raises when it is absent.
+
+    No default, for the reason :func:`load_lamp_status` gives: a guessed device
+    would draw as a greenhouse that never saw the sun.
+    """
+    raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    if "daylight" not in raw:
+        raise ValueError(f"no 'daylight' block in {yaml_path}")
+    return DaylightConfig(**raw["daylight"])
 
 
 def lamp_level_by_date(

@@ -24,6 +24,11 @@ async def init_pool(dsn: str, *, min_size: int = 1, max_size: int = 10) -> Async
     return _pool
 
 
+def is_initialised() -> bool:
+    """Whether :func:`init_pool` has run, so :func:`get_pool` will not raise."""
+    return _pool is not None
+
+
 def get_pool() -> AsyncConnectionPool:
     """Return the global pool. Raises if not initialised."""
     if _pool is None:

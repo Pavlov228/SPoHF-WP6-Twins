@@ -376,3 +376,47 @@ async def fetch_lamp_on_fraction(
         return pd.Series(dtype=float)
     index = pd.to_datetime([r[0] for r in rows], utc=True)
     return pd.Series([float(r[1]) for r in rows], index=index, dtype=float)
+
+
+async def fetch_hourly_stats(
+    device: str,
+    tag: str,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    *,
+    pool: AsyncConnectionPool | None = None,
+) -> pd.DataFrame:
+    """One tag's ``mean``, ``min`` and ``max`` per UTC hour, aggregated in SQL.
+
+    In SQL for the reason :func:`fetch_lamp_on_fraction` gives: years of
+    five-minute rows outgrow ``fetch_data_tsdb``'s cap, one row per hour does
+    not. Min and max ride along so a caller can tell a sensor that froze — the
+    same value all hour — from a quiet one. Hours with no reading are absent.
+    """
+    from wp6_data.db.pool import get_pool
+
+    conditions = ["device_name = %(device)s", "sensor_tag = %(tag)s", "value IS NOT NULL"]
+    params: dict[str, Any] = {"device": device, "tag": tag}
+    if start is not None:
+        conditions.append("time >= %(start)s")
+        params["start"] = start
+    if end is not None:
+        conditions.append("time <= %(end)s")
+        params["end"] = end
+
+    query = f"""
+        SELECT time_bucket('1 hour', time) AS hour, avg(value), min(value), max(value)
+        FROM readings
+        WHERE {" AND ".join(conditions)}
+        GROUP BY 1
+        ORDER BY 1
+    """
+    async with (pool or get_pool()).connection() as conn, conn.cursor() as cur:
+        await cur.execute(query, params)
+        rows = await cur.fetchall()
+
+    index = pd.to_datetime([r[0] for r in rows], utc=True)
+    return pd.DataFrame(
+        [[float(v) for v in r[1:]] for r in rows],
+        index=index, columns=["mean", "min", "max"], dtype=float,
+    )

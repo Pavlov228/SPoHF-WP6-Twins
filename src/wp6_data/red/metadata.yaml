@@ -214,6 +214,18 @@ lamps:
   switch: lg_assim_light_on
   share: lg_assim_light_pct
 
+# Where LetsGrow reports sunlight (red/lamp.py `DaylightConfig`), for telling
+# day from night on /dli/lamps. The outdoor station rather than red's roof PAR
+# sensor: it goes back to 2023, and it sees no lamp spill. It logs whole W/m²,
+# so dim twilight reads exactly 0 and "any radiation" is the bar. Against the
+# roof sensor at 5 µmol/m²/s it agreed on 96.9% of hours (Oct 2025 - Nov 2026);
+# the rest are dawn and dusk hours where the roof read more light than reached
+# the station — lamp spill, not sun.
+daylight:
+  device: "letsgrow-weather-station"
+  radiation: lg_rad
+  threshold: 0
+
 sensor_defaults:
   temp:
     type: "temperature"

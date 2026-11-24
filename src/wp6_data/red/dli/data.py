@@ -82,3 +82,20 @@ async def get_lamp_on_fraction(
     return await fetch_lamp_on_fraction(
         config.device, config.switch, config.share, start, end,
     )
+
+
+async def get_daylight_radiation(
+    start: datetime | None,
+    end: datetime | None,
+) -> pd.Series:
+    """LetsGrow's outdoor radiation, W/m² per UTC hour, frozen hours left out.
+
+    Which tag is ``deps.daylight``; what counts as frozen is
+    ``red.lamp.radiation_without_frozen_hours``.
+    """
+    from wp6_data.red.lamp import radiation_without_frozen_hours
+    from wp6_data.red.tsdb import fetch_hourly_stats
+
+    config = deps.daylight
+    stats = await fetch_hourly_stats(config.device, config.radiation, start, end)
+    return radiation_without_frozen_hours(stats)
