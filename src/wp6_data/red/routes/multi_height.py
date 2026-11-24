@@ -175,22 +175,20 @@ async def single_simple_page(
     label = meta.alias or measurement
     value_label = f"{label} ({meta.unit})" if meta.unit else label
 
-    df = await load_wire_readings()
-    wire_devices = [wire_device_id(wire, h) for h in WIRE_SENSOR_HEIGHTS]
-
-    # Default to the latest day this wire+measurement actually reported, not
-    # "today" — the wire feed can lag, which would otherwise show empty boxes.
+    # Default to the latest day this wire actually reported, not "today" — the
+    # wire feed can lag, which would otherwise show empty boxes. Found via a
+    # cheap aggregate, not by scanning the table.
     if day is not None:
         target_date = day
     else:
-        scoped = (
-            df[df["device"].isin(wire_devices) & (df["measurement"] == measurement)]
-            if not df.empty else df
-        )
-        target_date = (
-            scoped["time"].dt.tz_convert(timezone).max().date()
-            if not scoped.empty else None
-        )
+        target_date = await latest_wire_date(wire, timezone)
+
+    # Bound the fetch to the shown day's UTC window. Single-simple has no
+    # cross-night metric, so no look-back is needed.
+    fetch_start, fetch_end = day_window_utc(target_date or date.today(), timezone, 0)
+    df = await load_wire_readings(fetch_start, fetch_end)
+
+    wire_devices = [wire_device_id(wire, h) for h in WIRE_SENSOR_HEIGHTS]
 
     df_today, target_day = filter_for_day(df, timezone, target_date=target_date)
     metrics = compute_sensor_metrics(df_today, measurement, wire)
