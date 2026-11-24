@@ -135,10 +135,12 @@ def _year_to_date(year_rows: pd.DataFrame, column: str) -> pd.DataFrame:
 
     Only complete days are summed, so a total can undercount; ``counted`` and
     ``elapsed`` say by how much — days summed against calendar days so far.
+    ``added`` is the growth since the previous point: a month's hours at a
+    month end, the month so far on the last day, 0 at the start.
 
-    Returns ``date, total, counted, elapsed``.
+    Returns ``date, total, added, counted, elapsed``.
     """
-    columns = ["date", "total", "counted", "elapsed"]
+    columns = ["date", "total", "added", "counted", "elapsed"]
     if year_rows.empty:
         return pd.DataFrame(columns=columns)
     first, last = min(year_rows.index), max(year_rows.index)
@@ -158,7 +160,24 @@ def _year_to_date(year_rows: pd.DataFrame, column: str) -> pd.DataFrame:
             max(mark, year_start), int(so_far[column].sum()), len(so_far),
             max((mark - year_start).days + 1, 0),
         ])
-    return pd.DataFrame(rows, columns=columns)
+    totals = pd.DataFrame(rows, columns=["date", "total", "counted", "elapsed"])
+    totals["added"] = totals["total"].diff().fillna(0).astype(int)
+    return totals[columns]
+
+
+def _year_point_labels(year: int, totals: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """Text and position for each running-total point: its month's hours, and on
+    the last point also where the year stands. The starting zero says nothing."""
+    texts, positions = [], []
+    final = len(totals) - 1
+    for n, (total, added) in enumerate(zip(totals["total"], totals["added"], strict=True)):
+        if n == final:
+            texts.append(f"{year}: {total:,} h (+{added:,})")
+            positions.append("middle right")
+        else:
+            texts.append(f"+{added:,}" if n > 0 else "")
+            positions.append("top left")
+    return texts, positions
 
 
 def _make_hours_by_year(daily, hours: str) -> go.Figure:
@@ -194,17 +213,17 @@ def _make_hours_by_year(daily, hours: str) -> go.Figure:
         ), row=1, col=1)
 
         totals = _year_to_date(rows, column)
-        final = len(totals) - 1
+        texts, positions = _year_point_labels(year, totals)
         fig.add_trace(go.Scatter(
             x=[d.replace(year=_OVERLAY_YEAR) for d in totals["date"]],
             y=totals["total"],
             customdata=list(zip(
                 [d.isoformat() for d in totals["date"]], totals["counted"], totals["elapsed"],
-                strict=True,
+                totals["added"], strict=True,
             )),
-            text=[f"{year}: {t:,} h" if n == final else "" for n, t in enumerate(totals["total"])],
-            textposition="middle right",
-            textfont={"color": colour, "size": 12},
+            text=texts,
+            textposition=positions,
+            textfont={"color": colour, "size": 11},
             mode="lines+markers+text",
             name=f"{year} year to date",
             legendgroup=str(year),
@@ -214,6 +233,7 @@ def _make_hours_by_year(daily, hours: str) -> go.Figure:
             cliponaxis=False,
             hovertemplate=(
                 f"{year} to %{{customdata[0]}}<br>{label}: %{{y:,}} h so far"
+                " (+%{customdata[3]:,} since the previous point)"
                 "<br>from %{customdata[1]} of %{customdata[2]} days<extra></extra>"
             ),
         ), row=2, col=1)
@@ -324,7 +344,8 @@ async def dli_lamps(
         hours the lamps ran. <strong>Light-hours</strong>: hours with any light on
         the crop — sun, lamps or both. Click a year in the legend to hide it,
         double-click to show only that one. Below, each year's running total,
-        marked at every month end and labelled with where it stands now; hover a
+        marked at every month end with the hours that month added, and labelled
+        with where it stands now; hover a
         point to see how many days it counts, since a year that starts late or
         misses days sums short.</p>
         {toggle_html}

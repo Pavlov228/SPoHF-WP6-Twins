@@ -188,8 +188,7 @@ class TestHoursByYearChart:
         totals = [t for t in fig.data if t.showlegend is False]
 
         for trace in totals:
-            assert all(text == "" for text in trace.text[:-1])
-            assert trace.text[-1].endswith(f"{trace.y[-1]:,} h")
+            assert trace.text[-1].startswith(f"{trace.name[:4]}: {trace.y[-1]:,} h")
 
 
 class TestYearToDate:
@@ -206,6 +205,7 @@ class TestYearToDate:
             date(2026, 1, 1), date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 11),
         ]
         assert totals["total"].tolist() == [0, 31 * 10, 59 * 10, 70 * 10]
+        assert totals["added"].tolist() == [0, 31 * 10, 28 * 10, 11 * 10]
 
     def test_a_late_starting_year_starts_at_zero_where_its_data_does(self):
         from wp6_data.red.routes.dli.lamps import _year_to_date
@@ -216,3 +216,13 @@ class TestYearToDate:
         last = totals.iloc[-1]
         assert last["date"] == date(2023, 2, 28)
         assert (last["counted"], last["elapsed"]) == (18, 31 + 28)
+
+
+class TestYearPointLabels:
+    def test_each_point_shows_what_it_added_and_the_last_where_the_year_stands(self):
+        from wp6_data.red.routes.dli.lamps import _year_point_labels, _year_to_date
+
+        rows = TestYearToDate()._year(date(2026, 1, 1), 70, 10)
+        texts, _ = _year_point_labels(2026, _year_to_date(rows, "lamp_hours"))
+
+        assert texts == ["", "+310", "+280", "2026: 700 h (+110)"]
