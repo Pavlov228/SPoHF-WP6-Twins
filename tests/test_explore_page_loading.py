@@ -1,6 +1,6 @@
-"""The home page's data loading: what it caches and what it runs concurrently.
+"""The explorer page's data loading: what it caches and what it runs concurrently.
 
-Every home-page view reads devices, manual-upload freshness and export
+Every explorer view reads devices, manual-upload freshness and export
 metadata. These tests pin down the two properties that keep it fast: the
 export metadata is not re-fetched from the object store per view, and the
 three reads overlap instead of queueing.
@@ -18,7 +18,7 @@ from wp6_data.shared.export import (
     get_export_metadata,
     write_export_metadata,
 )
-from wp6_data.shared.routes.home import load_home_data
+from wp6_data.shared.routes.explore import load_explore_data
 
 
 class CountingStore:
@@ -112,7 +112,7 @@ async def test_home_data_fetches_run_concurrently():
     config = SimpleNamespace(export_store=CountingStore({"devices": {"dev": "t"}}))
 
     devices, manual, exports = await asyncio.wait_for(
-        load_home_data(config, InterlockedProvider()), timeout=2,
+        load_explore_data(config, InterlockedProvider()), timeout=2,
     )
 
     assert list(devices) == ["dev"]
@@ -124,6 +124,6 @@ async def test_home_data_fetches_run_concurrently():
 async def test_home_data_without_exports_is_empty(metadata):
     config = SimpleNamespace(export_store=CountingStore(metadata))
 
-    _, _, exports = await load_home_data(config, InterlockedProvider())
+    _, _, exports = await load_explore_data(config, InterlockedProvider())
 
     assert exports == {}

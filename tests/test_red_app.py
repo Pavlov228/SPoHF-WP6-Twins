@@ -434,8 +434,8 @@ def test_energy_renders_not_connected_page(client):
     assert PAGE_TITLE in resp.text
 
 
-def test_shared_home_composes_with_mocked_data_layer(client, monkeypatch):
-    """GET / drives RedSensorProvider; back it with empty mocked backends."""
+def test_shared_home_and_explore_compose_with_mocked_data_layer(client, monkeypatch):
+    """GET /explore drives RedSensorProvider; back it with empty mocked backends."""
     from wp6_data.red import deps as red_deps
     from wp6_data.red import tsdb
     from wp6_data.red.dashboard import config
@@ -458,6 +458,11 @@ def test_shared_home_composes_with_mocked_data_layer(client, monkeypatch):
         resp = client.get("/")
         assert resp.status_code == 200
         assert config.title in resp.text
+        assert 'href="/explore"' in resp.text
+
+        resp = client.get("/explore")
+        assert resp.status_code == 200
+        assert 'class="explore-tabs"' in resp.text
     finally:
         # Drop anything cached from the mocked backends.
         sensor_summary.invalidate()

@@ -1,60 +1,24 @@
 """Shared dashboard home page with pluggable hero cards."""
 
-import asyncio
 import inspect
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
-from wp6_data.shared import (
-    build_explore_tabs,
-    render_card,
-    render_explore_tabs,
-    render_page,
-)
+from wp6_data.shared import render_card, render_page
 from wp6_data.shared.auth import verify_session_user
-from wp6_data.shared.export import get_export_metadata
-from wp6_data.shared.routes.deps import get_provider, get_twin_config
-from wp6_data.shared.twin import SensorDataProvider, TwinConfig
+from wp6_data.shared.routes.deps import get_twin_config
+from wp6_data.shared.twin import TwinConfig
 
 router = APIRouter(dependencies=[Depends(verify_session_user)])
-
-
-async def load_home_data(
-    config: TwinConfig, provider: SensorDataProvider,
-) -> tuple[dict[str, dict], dict[str, Any], dict[str, str]]:
-    """Everything the home page reads: devices, manual freshness, exports.
-
-    The three are independent, so they run concurrently and the page waits for
-    the slowest one rather than their sum. Also called at startup to warm the
-    caches behind them (see ``app_factory``).
-    """
-    device_data, manual_metadata, export_meta = await asyncio.gather(
-        provider.fetch_device_data(),
-        provider.fetch_manual_metadata(),
-        get_export_metadata(config.export_store),
-    )
-    available_exports = export_meta.get("devices", {}) if export_meta else {}
-    return device_data, manual_metadata, available_exports
 
 
 @router.get("/", response_class=HTMLResponse)
 async def home(
     config: Annotated[TwinConfig, Depends(get_twin_config)],
-    provider: Annotated[SensorDataProvider, Depends(get_provider)],
-    tab: str = "devices",
 ) -> str:
-    """Dashboard home page — sensor explorer with pluggable hero cards."""
-    device_data, manual_metadata, available_exports = await load_home_data(
-        config, provider,
-    )
-
-    explore_tabs = build_explore_tabs(
-        config.metadata, device_data, available_exports,
-        manual_metadata=manual_metadata,
-        manual_sources=config.manual_sources,
-    )
+    """Dashboard home page — entry cards; the explorer lives on ``/explore``."""
 
     # Render hero cards (can be sync or async callables)
     hero_html_parts = []
@@ -73,17 +37,15 @@ async def home(
             '<div style="display:flex;gap:0.5rem">'
             '<a href="/dashboard" role="button">My Dashboard</a>'
             '<a href="/chart" role="button" class="outline">'
-            'New Chart</a></div>',
-            description="Your bookmarked charts in one view. "
-            "Or create a new chart from scratch.",
+            'New Chart</a>'
+            '<a href="/explore" role="button" class="outline">'
+            'Explore</a></div>',
+            description="Your bookmarked charts in one view, a new chart "
+            "from scratch, or every device and sensor in one table.",
             card_class="card card-bg card-bg-chart",
         )}
 
         {hero_html}
-
-        {render_card("Explore", render_explore_tabs(
-            explore_tabs, active=tab, extra_tabs=config.explore_extra_tabs,
-        ))}
 
         {config.home_extra_html}
 

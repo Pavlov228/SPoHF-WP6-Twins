@@ -15,7 +15,16 @@ from starlette.middleware.sessions import SessionMiddleware
 from wp6_data.shared.auth import NotAuthenticated, verify_session_user
 from wp6_data.shared.export import make_download_router
 from wp6_data.shared.observability import setup_observability
-from wp6_data.shared.routes import api, charts, dashboard_page, health, home, metrics, status
+from wp6_data.shared.routes import (
+    api,
+    charts,
+    dashboard_page,
+    explore,
+    health,
+    home,
+    metrics,
+    status,
+)
 from wp6_data.shared.telemetry import instrument_fastapi
 from wp6_data.shared.templates import _current_user, configure_dashboard
 from wp6_data.shared.twin import TwinConfig
@@ -26,18 +35,18 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 logger = structlog.get_logger()
 
 
-async def _warm_home_caches(config: TwinConfig) -> None:
-    """Load the home page's data once so its caches are hot before a visitor.
+async def _warm_explore_caches(config: TwinConfig) -> None:
+    """Load the explorer's data once so its caches are hot before a visitor.
 
     Without this, the first visitor after every deploy pays for the cold
     summary queries. Best effort: a failure here is a slow first page, not a
     reason to fail startup, so it is logged and dropped.
     """
     try:
-        await home.load_home_data(config, config.default_provider)
-        logger.info("home_caches_warmed")
+        await explore.load_explore_data(config, config.default_provider)
+        logger.info("explore_caches_warmed")
     except Exception as exc:
-        logger.warning("home_cache_warm_failed", error=str(exc))
+        logger.warning("explore_cache_warm_failed", error=str(exc))
 
 
 async def _set_user_context(request: Request, call_next):
@@ -83,7 +92,7 @@ def create_app(config: TwinConfig) -> FastAPI:
             await config.lifespan_startup()
         # Backgrounded so warming can't delay readiness; held so it isn't
         # garbage-collected mid-run, and cancelled if still running at shutdown.
-        warm_task = asyncio.create_task(_warm_home_caches(config))
+        warm_task = asyncio.create_task(_warm_explore_caches(config))
         yield
         warm_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -139,6 +148,7 @@ def create_app(config: TwinConfig) -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(api.router)
     app.include_router(home.router)
+    app.include_router(explore.router)
     app.include_router(charts.router)
     app.include_router(dashboard_page.router)
     app.include_router(status.router)

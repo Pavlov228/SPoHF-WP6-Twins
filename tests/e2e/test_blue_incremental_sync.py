@@ -203,8 +203,12 @@ async def test_incremental_sync_and_dashboard_display(tsdb_conn, monkeypatch):
         resp = await client.get("/health")
         assert resp.status_code == 200
 
-        # / (home) — should list our e2e devices and sensors
+        # / (home)
         resp = await client.get("/")
+        assert resp.status_code == 200
+
+        # /explore — should list our e2e devices and sensors
+        resp = await client.get("/explore")
         assert resp.status_code == 200
         body = resp.text
         assert "e2e-device-alpha" in body
