@@ -34,7 +34,13 @@ if [[ "${1:-}" == "--fast" ]]; then
     exit 0
 fi
 
-docker compose -f docker-compose.tsdb.yml up -d --wait
+# --no-recreate: every checkout (main, each worktree) shares this one container,
+# and its bind mount resolves to a different absolute path in each, which compose
+# reads as a changed config. Without the flag a gate run in one checkout destroys
+# and recreates the database under every other — dev servers, backfills, another
+# checkout's e2e. The init script only runs on an empty volume, so an existing
+# container never needs the newer mount.
+docker compose -f docker-compose.tsdb.yml up -d --wait --no-recreate
 uv run pytest tests/e2e/
 
 echo
