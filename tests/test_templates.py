@@ -307,9 +307,9 @@ MANUAL_SOURCES = frozenset({"sijia"})
 
 
 class TestBuildExploreTabs:
-    def test_returns_three_tabs(self):
+    def test_returns_four_tabs(self):
         tabs = build_explore_tabs(_registry(), {}, {})
-        assert set(tabs) == {"devices", "sensors", "manual"}
+        assert set(tabs) == {"devices", "sensors", "manual", "exports"}
 
     def test_splits_sensors_by_source(self):
         registry = _registry(
@@ -387,6 +387,52 @@ class TestBuildExploreTabs:
         tabs = build_explore_tabs(registry, device_data, {}, manual_sources=MANUAL_SOURCES)
         assert "No manual measurements" in tabs["manual"]
 
+    def test_exports_tab_lists_every_exported_device_with_a_link(self):
+        """A device filtered out of the Devices tab still gets its download here."""
+        registry = _registry(
+            sensor_defaults={
+                "par": SensorMetadata(type="radiation", alias="PAR"),
+                "chlorophyll": SensorMetadata(
+                    type="chemistry", alias="Chl", source="sijia",
+                ),
+            },
+            devices={
+                "s2100-01-par": DeviceMetadata(position="B4"),
+                "neurath-B-2034-strabelina": DeviceMetadata(source="sijia"),
+            },
+        )
+        device_data = {
+            "s2100-01-par": {"sensors": ["par"], "readings": 100},
+            "neurath-B-2034-strabelina": {
+                "sensors": ["chlorophyll"], "readings": 50,
+            },
+        }
+        exports = {
+            "s2100-01-par": "2026-10-22T02:00:00+00:00",
+            "neurath-B-2034-strabelina": "2026-10-22T02:00:00+00:00",
+        }
+        tabs = build_explore_tabs(
+            registry, device_data, exports, manual_sources=MANUAL_SOURCES,
+        )
+
+        # The manual plant is not in the Devices tab but its CSV is listed.
+        assert "neurath-B-2034-strabelina" not in tabs["devices"]
+        assert "neurath-B-2034-strabelina" in tabs["exports"]
+        assert 'href="/download/neurath-B-2034-strabelina"' in tabs["exports"]
+        assert 'href="/download/s2100-01-par"' in tabs["exports"]
+        assert ">Device</th>" in tabs["exports"]
+        assert ">Download</th>" in tabs["exports"]
+
+    def test_exports_tab_empty_state_when_no_exports(self):
+        registry = _registry(
+            sensor_defaults={"par": SensorMetadata(type="radiation")},
+            devices={"s2100-01-par": DeviceMetadata()},
+        )
+        device_data = {"s2100-01-par": {"sensors": ["par"], "readings": 1}}
+        tabs = build_explore_tabs(registry, device_data, {}, manual_sources=MANUAL_SOURCES)
+        assert "No exports yet" in tabs["exports"]
+        assert "<table" not in tabs["exports"]
+
 
 class TestManualMeasurementTab:
     def test_renders_with_source_grouping_columns(self):
@@ -435,38 +481,47 @@ class TestManualMeasurementTab:
 
 
 class TestRenderExploreTabs:
-    def test_renders_all_three_tab_buttons(self):
+    def test_renders_all_four_tab_buttons(self):
         html = render_explore_tabs(
-            {"devices": "<p>D</p>", "sensors": "<p>S</p>", "manual": "<p>M</p>"},
+            {"devices": "<p>D</p>", "sensors": "<p>S</p>",
+             "manual": "<p>M</p>", "exports": "<p>E</p>"},
         )
         assert 'data-tab="devices"' in html
         assert 'data-tab="sensors"' in html
         assert 'data-tab="manual"' in html
+        assert 'data-tab="exports"' in html
         assert "Manual measurements" in html
+        assert ">Exports</button>" in html
 
     def test_default_active_tab_is_devices(self):
-        html = render_explore_tabs({"devices": "", "sensors": "", "manual": ""})
+        html = render_explore_tabs(
+            {"devices": "", "sensors": "", "manual": "", "exports": ""},
+        )
         assert 'data-tab="devices" aria-selected="true"' in html
         assert 'data-tab="sensors" aria-selected="false"' in html
 
     def test_query_param_drives_active_tab(self):
         html = render_explore_tabs(
-            {"devices": "", "sensors": "", "manual": ""}, active="manual",
+            {"devices": "", "sensors": "", "manual": "", "exports": ""},
+            active="exports",
         )
-        assert 'data-tab="manual" aria-selected="true"' in html
+        assert 'data-tab="exports" aria-selected="true"' in html
         assert 'data-tab="devices" aria-selected="false"' in html
 
     def test_invalid_active_falls_back_to_devices(self):
         html = render_explore_tabs(
-            {"devices": "", "sensors": "", "manual": ""}, active="nonsense",
+            {"devices": "", "sensors": "", "manual": "", "exports": ""},
+            active="nonsense",
         )
         assert 'data-tab="devices" aria-selected="true"' in html
 
     def test_inactive_panels_are_hidden(self):
         html = render_explore_tabs(
-            {"devices": "<p>D</p>", "sensors": "<p>S</p>", "manual": "<p>M</p>"},
+            {"devices": "<p>D</p>", "sensors": "<p>S</p>",
+             "manual": "<p>M</p>", "exports": "<p>E</p>"},
             active="sensors",
         )
         assert 'data-tab-panel="devices" hidden' in html
+        assert 'data-tab-panel="exports" hidden' in html
         assert 'data-tab-panel="sensors">' in html
         assert 'data-tab-panel="manual" hidden' in html

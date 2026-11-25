@@ -1,5 +1,12 @@
 """CSV export job for WP6 Red - generates nightly per-device sensor data exports.
 
+Three legs, one CSV per device in the export store:
+
+- MySQL ``SENSOR_TABLES`` (the LoRaWAN devices),
+- MySQL ``wire_sensors`` (one CSV per virtual per-height wire device),
+- red TimescaleDB ``readings`` (every TSDB-sourced device: the LetsGrow
+  modules and the Sijia manual uploads), pivoted wide like blue's exporter.
+
 Also serves as the daily TSDB maintenance touchpoint: refreshes the
 `sensors_daily_summary` continuous aggregate and writes a `red-export` row
 to `sync_metadata` so the status page reflects nightly job health.
@@ -105,6 +112,55 @@ async def export_wire(
     return written
 
 
+async def get_tsdb_device_names() -> list[str]:
+    """All distinct device names in red's TSDB `readings` (LetsGrow + Sijia)."""
+    pool = get_pool()
+    async with pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute(
+            "SELECT DISTINCT device_name FROM readings ORDER BY device_name"
+        )
+        rows = await cur.fetchall()
+    return [row[0] for row in rows]
+
+
+async def export_tsdb_device(device_name: str, store: BlobStore) -> str | None:
+    """Export one TSDB device's readings to a wide-format CSV.
+
+    Same shape as blue's exporter: sensor tags pivot into columns, one row
+    per timestamp. Red's download router does not sanitise names, and the
+    TSDB device ids (`letsgrow-climate-b4`, `neurath-B-2034-strabelina`)
+    are already flat, so the CSV key is the bare device name.
+
+    Returns the key the CSV was written to, or None if no data.
+    """
+    pool = get_pool()
+    async with pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute(
+            "SELECT time, sensor_tag, value FROM readings "
+            "WHERE device_name = %(device)s ORDER BY time",
+            {"device": device_name},
+        )
+        rows = await cur.fetchall()
+
+    if not rows:
+        log.info("no_data", device=device_name)
+        return None
+
+    df = pd.DataFrame(rows, columns=["time", "sensor_tag", "value"])
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+
+    wide = df.pivot_table(index="time", columns="sensor_tag", values="value", aggfunc="first")
+    wide = wide.sort_index()
+    wide.columns.name = None  # Remove "sensor_tag" header label
+
+    key = csv_key(device_name)
+    await store.put(key, wide.to_csv().encode("utf-8"), content_type="text/csv")
+
+    log.info("exported", device=device_name, rows=len(wide), key=key)
+    return key
+
+
 async def run_export() -> None:
     """Run the full CSV export job and refresh TSDB-side daily aggregates."""
     settings = RedSettings()
@@ -116,6 +172,13 @@ async def run_export() -> None:
         log.info("cleared_stale_exports", files_removed=removed)
 
     started = time.monotonic()
+
+    # The TSDB pool serves both the readings leg and the trailing cagg
+    # refresh; init_pool is idempotent, so _refresh_red_tsdb reuses it.
+    await init_pool(settings.tsdb_url)
+    pool = get_pool()
+    await ensure_schema_red(pool)
+
     db = MySQLConnection(
         host=settings.db_host,
         port=settings.db_port,
@@ -145,6 +208,16 @@ async def run_export() -> None:
             except Exception as e:
                 log.error("export_failed", device=physical_id, error=str(e))
 
+        tsdb_devices = await get_tsdb_device_names()
+        log.info("found_tsdb_devices", count=len(tsdb_devices))
+        for device_name in tsdb_devices:
+            try:
+                key = await export_tsdb_device(device_name, store)
+                if key:
+                    exported[device_name] = datetime.now(UTC).isoformat()
+            except Exception as e:
+                log.error("export_failed", device=device_name, error=str(e))
+
         await write_export_metadata(
             store,
             {
@@ -158,19 +231,19 @@ async def run_export() -> None:
     finally:
         await db.close()
 
-    await _refresh_red_tsdb(settings.tsdb_url, len(exported), started)
+    await _refresh_red_tsdb(len(exported), started)
 
 
-async def _refresh_red_tsdb(tsdb_url: str, records: int, started: float) -> None:
+async def _refresh_red_tsdb(records: int, started: float) -> None:
     """Refresh the cagg and record a `red-export` sync_metadata row.
 
     Failures here must not crash the export job — the CSV files are already
-    written to the PVC and serve the dashboard's download links regardless.
+    written to the store and serve the dashboard's download links regardless.
+    The pool is the one opened in run_export; it is closed here so a failure
+    on the MySQL legs still leaves a clean process.
     """
     try:
-        await init_pool(tsdb_url)
         pool = get_pool()
-        await ensure_schema_red(pool)
         await refresh_sensor_summary(pool)
         duration_sec = time.monotonic() - started
         async with pool.connection() as conn:
