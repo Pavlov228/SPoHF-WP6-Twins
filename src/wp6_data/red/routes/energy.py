@@ -38,7 +38,9 @@ async def _daily_lamp_hours() -> pd.DataFrame:
 
 async def _daily_heat_index() -> pd.DataFrame:
     config = deps.heat_output
-    hourly = await fetch_heat_output(config.device, config.air, config.pipes, config.exponent)
+    hourly = await fetch_heat_output(
+        config.device, config.air, config.pipes, config.exponent, config.max_pipe,
+    )
     return daily_heat_output(hourly)
 
 
@@ -76,7 +78,9 @@ async def _section(
         return f"<h2>{title}</h2><p>Could not load: {e}</p>"
     if daily.empty:
         return f"<h2>{title}</h2><p>No complete days yet.</p>"
-    chart = make_daily_by_year_chart(daily, column, label, unit, **chart_kwargs)
+    chart = make_daily_by_year_chart(
+        daily, column, label, unit, hide_late_starts=True, **chart_kwargs,
+    )
     return (
         f"<h2>{title}</h2>"
         f"{chart.to_html(full_html=False, include_plotlyjs=plotly.include())}"
@@ -108,8 +112,10 @@ async def energy() -> str:
         "per day. A heating pipe gives off heat roughly in proportion to that, so the "
         "index follows gas use. It is <strong>relative</strong>: both pipes count "
         "equally, and no pipe size, boiler efficiency or gas price is in it, so "
-        "compare it between days and years, not as kWh or euros. Heating hours "
-        "are not shown because the pipes stay warm almost around the clock all year.",
+        "compare it between days and years, not as kWh or euros. Pipe readings above "
+        f"{heating.max_pipe:g} °C are sensor faults and are left out, so those days show "
+        "as gaps. Heating hours are not shown because the pipes stay warm almost "
+        "around the clock all year.",
     )
 
     content = f"""
@@ -117,7 +123,9 @@ async def energy() -> str:
         <p>What red spends energy on — the lamps and the heating — per day, with every
         year LetsGrow has laid on the same calendar. Below each chart, the year's
         running total, marked at every month end with what that month added. Click a
-        year in a legend to hide it, double-click to show only that one.</p>
+        year in a legend to hide it, double-click to show only that one. A year whose
+        data starts after January is hidden to begin with — its total would read
+        low — and is one click away in the legend.</p>
         {lamps_html}
         {heat_html}
         <small>Only days LetsGrow reported in full are drawn; it delivers a day or

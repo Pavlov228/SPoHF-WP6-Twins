@@ -239,6 +239,11 @@ heating:
   air: lg_temp_greenhouse
   pipes: [lg_pipe_lower, lg_pipe_growth]
   exponent: 1.25
+  # °C. A pipe reading above this is a sensor fault, not heat: a hot-water loop
+  # stays under ~95 °C, and the real maximum seen is ~85. The growing pipe read
+  # exactly 150 for 31 h on 30 Jun - 1 Jul 2024, which drew as the year's
+  # hottest heating day. Such readings are dropped, so those days are a gap.
+  max_pipe: 95
 
 sensor_defaults:
   temp:

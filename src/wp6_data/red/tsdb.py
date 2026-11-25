@@ -427,12 +427,15 @@ async def fetch_heat_output(
     air: str,
     pipes: list[str],
     exponent: float,
+    max_pipe: float,
     start: datetime | None = None,
     end: datetime | None = None,
     *,
     pool: AsyncConnectionPool | None = None,
 ) -> pd.Series:
     """Heat-output index per UTC hour: Σ circuits mean(max(pipe − air, 0) ** exponent).
+
+    Pipe readings above ``max_pipe`` are sensor faults and are left out.
 
     Each pipe reading is paired with the air reading of the same LetsGrow tick,
     so the difference is never taken across time. An hour counts only when
@@ -445,7 +448,7 @@ async def fetch_heat_output(
     conditions = ["a.device_name = %(device)s", "a.sensor_tag = %(air)s"]
     params: dict[str, Any] = {
         "device": device, "air": air, "pipes": list(pipes),
-        "exponent": exponent, "circuits": len(pipes),
+        "exponent": exponent, "circuits": len(pipes), "max_pipe": max_pipe,
     }
     if start is not None:
         conditions.append("a.time >= %(start)s")
@@ -465,6 +468,7 @@ async def fetch_heat_output(
              AND p.sensor_tag = ANY(%(pipes)s)
             WHERE {" AND ".join(conditions)}
               AND a.value IS NOT NULL AND p.value IS NOT NULL
+              AND p.value <= %(max_pipe)s
             GROUP BY 1, 2
         )
         SELECT hour, sum(output)

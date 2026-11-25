@@ -278,3 +278,22 @@ class TestDailyByYearChart:
 
         for trace in totals:
             assert trace.text[-1].startswith(f"{trace.name[:4]}: {trace.y[-1]:,} h")
+
+    def test_a_late_starting_year_can_start_hidden_but_listed(self):
+        daily = pd.DataFrame({
+            "date": [date(2023, 2, 11), date(2024, 1, 1), date(2026, 1, 1)],
+            "value": [1.0, 2.0, 3.0],
+        })
+
+        fig = make_daily_by_year_chart(daily, "value", "Hours", hide_late_starts=True)
+
+        visible = {t.legendgroup: t.visible for t in fig.data}
+        assert visible == {"2023": "legendonly", "2024": True, "2026": True}
+        assert all(t.visible == visible[t.legendgroup] for t in fig.data)
+
+    def test_late_starting_years_are_drawn_unless_asked(self):
+        daily = pd.DataFrame({"date": [date(2023, 2, 11)], "value": [1.0]})
+
+        fig = make_daily_by_year_chart(daily, "value", "Hours")
+
+        assert all(t.visible in (None, True) for t in fig.data)

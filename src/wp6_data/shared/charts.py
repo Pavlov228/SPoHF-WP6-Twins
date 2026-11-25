@@ -750,6 +750,7 @@ def make_daily_by_year_chart(
     unit: str = "",
     *,
     daily_range: tuple[float, float] | None = None,
+    hide_late_starts: bool = False,
 ) -> go.Figure:
     """``column`` per day, one line per year above, its running total below.
 
@@ -758,6 +759,11 @@ def make_daily_by_year_chart(
     the two panels stay connected: zooming the months zooms both, and a year's
     legend entry hides it in both. The running total is marked at each month
     end with what that month added, and labelled with where the year stands.
+
+    ``hide_late_starts`` draws a year whose data begins after January as if
+    unticked in the legend: still listed, one click away, but not drawn — its
+    running total starts late and would read as a light year. The current year
+    is partial at the other end, which is the point of watching it, so it stays.
     """
     suffix = f" {unit}" if unit else ""
     fig = make_subplots(
@@ -772,6 +778,7 @@ def make_daily_by_year_chart(
         first, last = min(rows.index), max(rows.index)
         days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
         filled = rows.reindex(days)
+        visible: bool | str = "legendonly" if hide_late_starts and first.month > 1 else True
         fig.add_trace(go.Scatter(
             x=[d.replace(year=_OVERLAY_YEAR) for d in days],
             y=filled[column],
@@ -779,6 +786,7 @@ def make_daily_by_year_chart(
             mode="lines",
             name=str(year),
             legendgroup=str(year),
+            visible=visible,
             line={"color": colour, "width": 1.5},
             connectgaps=False,
             hovertemplate=f"%{{customdata}}<br>{label}: %{{y:,.0f}}{suffix}<extra></extra>",
@@ -800,6 +808,7 @@ def make_daily_by_year_chart(
             name=f"{year} year to date",
             legendgroup=str(year),
             showlegend=False,
+            visible=visible,
             marker={"color": colour, "size": 7, "line": {"color": "white", "width": 1}},
             line={"color": colour, "width": 1.5},
             cliponaxis=False,

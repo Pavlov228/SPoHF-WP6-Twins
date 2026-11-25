@@ -12,6 +12,9 @@ It grows with both how long and how hot the pipes ran. Hours alone do not: red
 keeps its pipes warm ~22-24 hours a day for most of the year (minimum-pipe
 operation), so a count of heating hours is flat while the gas bill is not.
 
+Pipe readings above ``max_pipe`` are sensor faults and are dropped; the hour
+then lacks that circuit, so its day is incomplete and draws as a gap.
+
 Relative, not kWh: the circuits are weighted equally, and no pipe length,
 diameter, boiler efficiency or gas price is in it. Those are constants a later
 step can multiply in, without changing the line's shape.
@@ -33,6 +36,8 @@ class HeatOutputConfig(BaseModel):
     air: str  # sensor tag: greenhouse air temperature, °C
     pipes: list[str]  # sensor tags: one measured pipe temperature per circuit, °C
     exponent: float
+    # °C: a pipe reading above this is a faulty sensor and is left out.
+    max_pipe: float
 
 
 def load_heat_output(yaml_path: Path) -> HeatOutputConfig:

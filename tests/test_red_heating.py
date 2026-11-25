@@ -37,6 +37,8 @@ class TestHeatOutputConfig:
 
         assert config.device.startswith("letsgrow-")
         assert config.pipes
+        # The one fault seen read 150 °C; a ceiling at or above it would let it through.
+        assert config.max_pipe < 150
 
     def test_a_metadata_file_without_the_block_is_refused(self, tmp_path):
         path = tmp_path / "metadata.yaml"
