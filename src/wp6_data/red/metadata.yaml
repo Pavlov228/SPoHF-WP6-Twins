@@ -226,6 +226,20 @@ daylight:
   radiation: lg_rad
   threshold: 0
 
+# How hard the heating ran (red/heating.py `HeatOutputConfig`), for /energy.
+# A heating pipe gives off heat roughly in proportion to
+# (pipe temperature - air temperature)^exponent, the standard pipe heat-transfer
+# relation, so summing that over the circuits and the hours follows gas use.
+# Relative only: the circuits are weighted equally, and no pipe length,
+# diameter, boiler efficiency or gas price is in it yet. LetsGrow has no
+# heating on/off: the pipes run ~22-24 h/day all year (minimum-pipe operation),
+# so hours alone do not follow cost — how hot they ran does.
+heating:
+  device: "letsgrow-climate-b4"
+  air: lg_temp_greenhouse
+  pipes: [lg_pipe_lower, lg_pipe_growth]
+  exponent: 1.25
+
 sensor_defaults:
   temp:
     type: "temperature"

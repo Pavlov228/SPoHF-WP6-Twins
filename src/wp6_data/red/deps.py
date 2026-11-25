@@ -8,6 +8,7 @@ from wp6_data.config import ObjectStoreSettings, RedSettings, Settings
 from wp6_data.red.db import MySQLConnection
 from wp6_data.red.dli import OpenMeteoClient
 from wp6_data.red.growth_sections import load_growth_sections
+from wp6_data.red.heating import load_heat_output
 from wp6_data.red.lamp import load_daylight, load_lamp_status
 from wp6_data.shared.blob import make_store
 from wp6_data.shared.metadata import MetadataRegistry
@@ -25,6 +26,9 @@ growth_sections = load_growth_sections(_METADATA_PATH)
 lamp_status = load_lamp_status(_METADATA_PATH)
 # Where LetsGrow reports outdoor sunlight (CONTEXT "Lamp calendar").
 daylight = load_daylight(_METADATA_PATH)
+# Which LetsGrow pipes and air temperature make the heat-output index (CONTEXT
+# "Heat-output index").
+heat_output = load_heat_output(_METADATA_PATH)
 
 # MySQL connection settings
 DB_HOST = settings.db_host

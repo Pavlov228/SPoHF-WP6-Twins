@@ -1,6 +1,7 @@
 """Shared Plotly chart helpers."""
 
-from datetime import date
+from calendar import monthrange
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
@@ -673,3 +674,156 @@ def prepare_comparison(
     if not df.empty:
         df = df.sort_values("time")
     return df, left_label, right_label
+
+
+# ── A daily value, one line per year, on one shared Jan-Dec calendar ─────────
+
+# Every year is drawn onto one leap year, so 29 February has somewhere to go and
+# the axis reads as months rather than as any particular year.
+_OVERLAY_YEAR = 2000
+
+
+def year_to_date(year_rows: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Running total of ``column`` through one year, at the points worth marking.
+
+    ``year_rows`` is one calendar year of daily values, indexed by date. The
+    points: **0 on the year's first day of data** — 1 January for a whole year,
+    later for one whose data starts late, so it never claims days it did not
+    count — then every month end the data reaches, then the **last day** of
+    data, so the current year's total is today's and not last month's.
+
+    Days missing from ``year_rows`` are simply not summed, so a total can
+    undercount; ``counted`` and ``elapsed`` say by how much — days summed
+    against calendar days so far. ``added`` is the growth since the previous
+    point: a month's worth at a month end, the month so far on the last day.
+
+    Totals are rounded to whole units. Returns ``date, total, added, counted,
+    elapsed``.
+    """
+    columns = ["date", "total", "added", "counted", "elapsed"]
+    if year_rows.empty:
+        return pd.DataFrame(columns=columns)
+    first, last = min(year_rows.index), max(year_rows.index)
+    year_start = date(first.year, 1, 1)
+
+    marks = [first - timedelta(days=1)]  # the eve of counting: nothing summed yet
+    marks += [
+        date(first.year, m, monthrange(first.year, m)[1])
+        for m in range(first.month, last.month + 1)
+    ]
+    marks = sorted({d for d in marks if d < last} | {last})
+
+    rows = []
+    for mark in marks:
+        so_far = year_rows[year_rows.index <= mark]
+        rows.append([
+            max(mark, year_start), round(float(so_far[column].sum())), len(so_far),
+            max((mark - year_start).days + 1, 0),
+        ])
+    totals = pd.DataFrame(rows, columns=["date", "total", "counted", "elapsed"])
+    totals["added"] = totals["total"].diff().fillna(0).astype(int)
+    return totals[columns]
+
+
+def year_point_labels(
+    year: int, totals: pd.DataFrame, unit: str,
+) -> tuple[list[str], list[str]]:
+    """Text and position for each running-total point: what it added, and on the
+    last point also where the year stands. The starting zero says nothing."""
+    texts, positions = [], []
+    final = len(totals) - 1
+    suffix = f" {unit}" if unit else ""
+    for n, (total, added) in enumerate(zip(totals["total"], totals["added"], strict=True)):
+        if n == final:
+            texts.append(f"{year}: {total:,}{suffix} (+{added:,})")
+            positions.append("middle right")
+        else:
+            texts.append(f"+{added:,}" if n > 0 else "")
+            positions.append("top left")
+    return texts, positions
+
+
+def make_daily_by_year_chart(
+    daily: pd.DataFrame,
+    column: str,
+    label: str,
+    unit: str = "",
+    *,
+    daily_range: tuple[float, float] | None = None,
+) -> go.Figure:
+    """``column`` per day, one line per year above, its running total below.
+
+    ``daily`` has a ``date`` column and ``column``; each calendar year is laid
+    onto the same Jan-Dec axis so years compare month for month. One figure so
+    the two panels stay connected: zooming the months zooms both, and a year's
+    legend entry hides it in both. The running total is marked at each month
+    end with what that month added, and labelled with where the year stands.
+    """
+    suffix = f" {unit}" if unit else ""
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.06, row_heights=[0.55, 0.45],
+    )
+    years = sorted({d.year for d in daily["date"]})
+    for i, year in enumerate(years):
+        rows = daily[[d.year == year for d in daily["date"]]].set_index("date")
+        colour = CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)]
+        # Every day between the year's first and last, so a missing day breaks
+        # the line instead of being bridged.
+        first, last = min(rows.index), max(rows.index)
+        days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+        filled = rows.reindex(days)
+        fig.add_trace(go.Scatter(
+            x=[d.replace(year=_OVERLAY_YEAR) for d in days],
+            y=filled[column],
+            customdata=[d.isoformat() for d in days],
+            mode="lines",
+            name=str(year),
+            legendgroup=str(year),
+            line={"color": colour, "width": 1.5},
+            connectgaps=False,
+            hovertemplate=f"%{{customdata}}<br>{label}: %{{y:,.0f}}{suffix}<extra></extra>",
+        ), row=1, col=1)
+
+        totals = year_to_date(rows, column)
+        texts, positions = year_point_labels(year, totals, unit)
+        fig.add_trace(go.Scatter(
+            x=[d.replace(year=_OVERLAY_YEAR) for d in totals["date"]],
+            y=totals["total"],
+            customdata=list(zip(
+                [d.isoformat() for d in totals["date"]], totals["counted"], totals["elapsed"],
+                totals["added"], strict=True,
+            )),
+            text=texts,
+            textposition=positions,
+            textfont={"color": colour, "size": 11},
+            mode="lines+markers+text",
+            name=f"{year} year to date",
+            legendgroup=str(year),
+            showlegend=False,
+            marker={"color": colour, "size": 7, "line": {"color": "white", "width": 1}},
+            line={"color": colour, "width": 1.5},
+            cliponaxis=False,
+            hovertemplate=(
+                f"{year} to %{{customdata[0]}}<br>{label}: %{{y:,}}{suffix} so far"
+                " (+%{customdata[3]:,} since the previous point)"
+                "<br>from %{customdata[1]} of %{customdata[2]} days<extra></extra>"
+            ),
+        ), row=2, col=1)
+
+    months = [date(_OVERLAY_YEAR, 1, 1), date(_OVERLAY_YEAR, 12, 31)]
+    fig.update_layout(
+        template="plotly_white",
+        height=720,
+        # Room on the right for the final totals' labels.
+        margin={"l": 60, "r": 130, "t": 20, "b": 40},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="closest",
+    )
+    fig.update_xaxes(tickformat="%b", dtick="M1", range=months)
+    unit_note = f" ({unit})" if unit else ""
+    fig.update_yaxes(title_text=f"{label} per day{unit_note}", row=1, col=1)
+    if daily_range is not None:
+        fig.update_yaxes(range=list(daily_range), row=1, col=1)
+    fig.update_yaxes(title_text=f"Year to date{unit_note}", rangemode="tozero", row=2, col=1)
+    return fig

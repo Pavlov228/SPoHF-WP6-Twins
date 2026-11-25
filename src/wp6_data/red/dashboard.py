@@ -17,6 +17,7 @@ from wp6_data.red.routes import (
     crop_cycles,
     dli,
     dli_model,
+    energy,
     multi_height,
     sijia,
 )
@@ -202,6 +203,15 @@ def _dli_card() -> str:
         card_class="card-bg card-bg-sun",
     )
 
+def _energy_card() -> str:
+    return render_card(
+        "Energy",
+        '<a href="/energy" role="button">Lamps &amp; Heating</a>',
+        description="Lamp-hours and heat output per day, year against year.",
+        card_class="card-bg card-bg-energy",
+    )
+
+
 def _crop_cycles_card() -> str:
     return render_card(
         "Crop Cycles",
@@ -245,8 +255,9 @@ config = TwinConfig(
                    red_charts.router,
                    multi_height.router, 
                    crop_cycles.router,
+                   energy.router,
                    sijia.router],
-    hero_cards=[_dli_card, _multi_height_card, _crop_cycles_card],
+    hero_cards=[_dli_card, _multi_height_card, _crop_cycles_card, _energy_card],
     status_extras=[render_sijia_card, object_store_status_card],
 
     home_extra_html=(

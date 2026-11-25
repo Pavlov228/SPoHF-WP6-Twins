@@ -420,3 +420,64 @@ async def fetch_hourly_stats(
         [[float(v) for v in r[1:]] for r in rows],
         index=index, columns=["mean", "min", "max"], dtype=float,
     )
+
+
+async def fetch_heat_output(
+    device: str,
+    air: str,
+    pipes: list[str],
+    exponent: float,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    *,
+    pool: AsyncConnectionPool | None = None,
+) -> pd.Series:
+    """Heat-output index per UTC hour: Σ circuits mean(max(pipe − air, 0) ** exponent).
+
+    Each pipe reading is paired with the air reading of the same LetsGrow tick,
+    so the difference is never taken across time. An hour counts only when
+    every circuit reported in it; otherwise it would sum short and read as a
+    mild hour. See ``red.heating`` for what the index means. In SQL for the
+    row-count reason :func:`fetch_lamp_on_fraction` gives.
+    """
+    from wp6_data.db.pool import get_pool
+
+    conditions = ["a.device_name = %(device)s", "a.sensor_tag = %(air)s"]
+    params: dict[str, Any] = {
+        "device": device, "air": air, "pipes": list(pipes),
+        "exponent": exponent, "circuits": len(pipes),
+    }
+    if start is not None:
+        conditions.append("a.time >= %(start)s")
+        params["start"] = start
+    if end is not None:
+        conditions.append("a.time <= %(end)s")
+        params["end"] = end
+
+    query = f"""
+        WITH per_circuit AS (
+            SELECT time_bucket('1 hour', a.time) AS hour, p.sensor_tag,
+                   avg(power(GREATEST(p.value - a.value, 0), %(exponent)s)) AS output
+            FROM readings a
+            JOIN readings p
+              ON p.device_name = a.device_name
+             AND p.time = a.time
+             AND p.sensor_tag = ANY(%(pipes)s)
+            WHERE {" AND ".join(conditions)}
+              AND a.value IS NOT NULL AND p.value IS NOT NULL
+            GROUP BY 1, 2
+        )
+        SELECT hour, sum(output)
+        FROM per_circuit
+        GROUP BY hour
+        HAVING count(*) = %(circuits)s
+        ORDER BY hour
+    """
+    async with (pool or get_pool()).connection() as conn, conn.cursor() as cur:
+        await cur.execute(query, params)
+        rows = await cur.fetchall()
+
+    if not rows:
+        return pd.Series(dtype=float)
+    index = pd.to_datetime([r[0] for r in rows], utc=True)
+    return pd.Series([float(r[1]) for r in rows], index=index, dtype=float)

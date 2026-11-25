@@ -1,0 +1,40 @@
+<svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" width="600" height="200">
+  <defs>
+    <linearGradient id="energyFade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="25%" stop-color="white" stop-opacity="0"/>
+      <stop offset="55%" stop-color="white" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="white" stop-opacity="1"/>
+    </linearGradient>
+    <mask id="energyMask">
+      <rect x="0" y="0" width="600" height="200" fill="url(#energyFade)"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#energyMask)">
+
+    <!-- A grow lamp overhead, its light falling in a widening cone -->
+    <g fill="white">
+      <rect x="470" y="14" width="92" height="12" rx="3" fill-opacity="0.55"/>
+      <rect x="512" y="4" width="8" height="10" fill-opacity="0.35"/>
+    </g>
+    <path d="M474 26 L430 112 L602 112 L558 26 Z" fill="white" fill-opacity="0.07"/>
+
+    <!-- Heat rising off the pipes, in waves -->
+    <g fill="none" stroke="white" stroke-width="1.4" stroke-linecap="round">
+      <path d="M360 150 q6 -8 0 -16 t0 -16 t0 -16" stroke-opacity="0.14"/>
+      <path d="M410 150 q6 -8 0 -16 t0 -16 t0 -16 t0 -16" stroke-opacity="0.22"/>
+      <path d="M460 150 q6 -8 0 -16 t0 -16 t0 -16" stroke-opacity="0.30"/>
+      <path d="M510 150 q6 -8 0 -16 t0 -16 t0 -16 t0 -16" stroke-opacity="0.38"/>
+      <path d="M560 150 q6 -8 0 -16 t0 -16 t0 -16" stroke-opacity="0.46"/>
+    </g>
+
+    <!-- The heating pipes: the lower rail pair, and the growing pipe above -->
+    <g stroke="white" stroke-linecap="round" fill="none">
+      <line x1="300" y1="176" x2="600" y2="176" stroke-width="7" stroke-opacity="0.45"/>
+      <line x1="300" y1="190" x2="600" y2="190" stroke-width="7" stroke-opacity="0.45"/>
+      <line x1="330" y1="158" x2="600" y2="158" stroke-width="4" stroke-opacity="0.32"/>
+    </g>
+
+  </g>
+</svg>

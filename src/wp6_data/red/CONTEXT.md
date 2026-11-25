@@ -40,6 +40,15 @@ _Rejected_: measuring it on overcast hours only. Six times tighter in summer, an
 The `/dli/lamps` page: every hour of every day coloured dark / daylight / daylight+lamps / lamps-only, and below it the lamp-hours and light-hours of each day, one line per year on a shared Jan–Dec axis. **Entirely LetsGrow**: lamp on/off from its switch (`metadata.yaml` `lamps`), the sun from its outdoor weather station (`daylight`, any radiation above 0 W/m²). Not red's PAR sensors, so it reaches back to February 2023 instead of late 2025, and survives the sensors' summer-2026 outage. An hour LetsGrow did not report is a gap, never dark.
 _Why not the roof sensor for daylight_: it agrees with the station on 96.9% of hours, and the rest are dawn/dusk hours where it read more light than reached the station outside — lamp spill from just below it, not sun. A LetsGrow outage (25 Oct – 2 Nov 2026) now draws blank; the sensor fallback it used to have could not rule lamps out under the sun anyway.
 
+**Energy page**:
+`/energy`: what red spends energy on — lamp-hours and the **Heat-output index** — per day, every LetsGrow year laid on one Jan–Dec calendar with a running total below, the same chart as the **Lamp calendar**'s (`shared.charts.make_daily_by_year_chart`). Lamp-hours are counted exactly as there.
+
+**Heat-output index**:
+How hard the heating ran, relative — the line gas cost follows, since LetsGrow has no gas meter. Per reading, each heating pipe's excess over the greenhouse air, `max(pipe − air, 0) ** 1.25` (the standard pipe heat-transfer relation), averaged per hour, summed over the circuits and over the day (`metadata.yaml` `heating`, `red/heating.py`).
+_Why not heating hours_: red keeps its pipes warm ~22–24 h/day most of the year (minimum-pipe operation; even "pipe more than 5 °C above air" counts 19–24 h/day outside June 2026), so hours are flat while the bill is not. The index swings 2–3× between seasons.
+_Why the measured pipe, not the request_: the `_calc` request tags sit at a 20 °C floor for hours, which is no heat at all; the measured pipe against the air says what was delivered.
+_Relative_: both circuits weigh equally and no pipe size, boiler efficiency or gas price is in it. Those are constants to multiply in later (kWh/m² → m³ gas → €); the shape will not change.
+
 **Position**:
 A labelled location/zone in the greenhouse a sensor belongs to (e.g. "B"). Horizontal placement, not vertical. Declared per device in `metadata.yaml` and used only to group the explorer's device table; every red device currently shares one position, so the field is declared but not yet discriminating.
 _Avoid_: height (height is vertical — see below).

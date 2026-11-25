@@ -148,6 +148,9 @@
     .card-bg-cycles::after {
         background-image: url(/static/cards/cycles.svg);
     }
+    .card-bg-energy::after {
+        background-image: url(/static/cards/energy.svg);
+    }
 
     /* --- Stats cards --- */
     .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }

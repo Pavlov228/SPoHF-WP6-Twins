@@ -425,6 +425,15 @@ def test_dli_lamps_renders_not_connected_page(client):
     assert PAGE_TITLE in resp.text
 
 
+def test_energy_renders_not_connected_page(client):
+    from wp6_data.red.routes.energy import PAGE_TITLE
+
+    resp = client.get("/energy")
+    assert resp.status_code == 200
+    assert "Database not connected" in resp.text
+    assert PAGE_TITLE in resp.text
+
+
 def test_shared_home_composes_with_mocked_data_layer(client, monkeypatch):
     """GET / drives RedSensorProvider; back it with empty mocked backends."""
     from wp6_data.red import deps as red_deps
