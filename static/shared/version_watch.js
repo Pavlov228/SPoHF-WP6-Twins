@@ -1,5 +1,5 @@
 // Badge the favicon when the server runs a newer build than this page loaded.
-// The page shell only includes this script when it has a data-version.
+// The page shell includes this script only when it has a data-version.
 (function () {
   const POLL_MS = 60 * 1000;
   const BADGE_COLOR = "#e5484d";
