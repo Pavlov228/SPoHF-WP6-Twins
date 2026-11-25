@@ -15,6 +15,7 @@ to `sync_metadata` so the status page reflects nightly job health.
 import asyncio
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 import structlog
@@ -123,6 +124,13 @@ async def get_tsdb_device_names() -> list[str]:
     return [row[0] for row in rows]
 
 
+# Server-side cursor page size for the TSDB leg. LetsGrow devices carry
+# millions of rows (8.4M for letsgrow-climate-b4 alone), and fetching a
+# whole device into memory is what OOM-killed the export job at its 1Gi
+# limit — so rows stream through in pages, never more than one page in RAM.
+_TSDB_EXPORT_PAGE = 100_000
+
+
 async def export_tsdb_device(device_name: str, store: BlobStore) -> str | None:
     """Export one TSDB device's readings to a wide-format CSV.
 
@@ -131,33 +139,78 @@ async def export_tsdb_device(device_name: str, store: BlobStore) -> str | None:
     TSDB device ids (`letsgrow-climate-b4`, `neurath-B-2034-strabelina`)
     are already flat, so the CSV key is the bare device name.
 
+    Streams rather than loading the device: a named (server-side) cursor
+    pages the rows in, and each timestamp's row is written out as soon as
+    the next timestamp arrives (ORDER BY time, sensor_tag keeps one
+    timestamp's tags contiguous). Memory stays bounded at one page plus
+    one CSV row regardless of device size — letsgrow-climate-b4 alone is
+    8.4M rows, which is what OOM-killed the whole-device fetch at 1Gi.
+
+    The tag set is discovered in a first pass and fixed for the write, so
+    a tag appearing mid-history would need a column appended — that cannot
+    happen for the declared letsgrow/sijia devices (their tags are fixed
+    by their source) and is logged loudly if it ever does.
+
     Returns the key the CSV was written to, or None if no data.
     """
+    import csv as csv_mod
+    import io
+
     pool = get_pool()
-    async with pool.connection() as conn, conn.cursor() as cur:
-        await cur.execute(
-            "SELECT time, sensor_tag, value FROM readings "
-            "WHERE device_name = %(device)s ORDER BY time",
-            {"device": device_name},
-        )
-        rows = await cur.fetchall()
-
-    if not rows:
-        log.info("no_data", device=device_name)
-        return None
-
-    df = pd.DataFrame(rows, columns=["time", "sensor_tag", "value"])
-    df["time"] = pd.to_datetime(df["time"], utc=True)
-    df["value"] = pd.to_numeric(df["value"], errors="coerce")
-
-    wide = df.pivot_table(index="time", columns="sensor_tag", values="value", aggfunc="first")
-    wide = wide.sort_index()
-    wide.columns.name = None  # Remove "sensor_tag" header label
-
     key = csv_key(device_name)
-    await store.put(key, wide.to_csv().encode("utf-8"), content_type="text/csv")
 
-    log.info("exported", device=device_name, rows=len(wide), key=key)
+    async with pool.connection() as conn:
+        # Pass 1: the device's tag set, in first-seen order.
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT DISTINCT sensor_tag FROM readings "
+                "WHERE device_name = %(device)s ORDER BY sensor_tag",
+                {"device": device_name},
+            )
+            tags = [row[0] for row in await cur.fetchall()]
+        if not tags:
+            log.info("no_data", device=device_name)
+            return None
+
+        # Pass 2: stream the rows, pivoting on the fly.
+        buffer = io.StringIO()
+        writer = csv_mod.writer(buffer)
+        writer.writerow(["time", *tags])
+        rows_written = 0
+        current_time = None
+        wide_row: dict[str, Any] = {}
+
+        def flush_row() -> None:
+            nonlocal rows_written
+            if current_time is None:
+                return
+            writer.writerow([current_time, *[wide_row.get(t) for t in tags]])
+            rows_written += 1
+
+        async with conn.cursor(name=f"export_{device_name}") as cur:
+            await cur.execute(
+                "SELECT time, sensor_tag, value FROM readings "
+                "WHERE device_name = %(device)s ORDER BY time, sensor_tag",
+                {"device": device_name},
+            )
+            cur.itersize = _TSDB_EXPORT_PAGE
+            async for ts, tag, value in cur:
+                if tag not in tags:
+                    log.warning(
+                        "tsdb_export_undeclared_tag", device=device_name, tag=tag,
+                    )
+                    continue
+                if ts != current_time:
+                    flush_row()
+                    current_time = ts
+                    wide_row = {}
+                wide_row[tag] = value
+            flush_row()
+
+    await store.put(
+        key, buffer.getvalue().encode("utf-8"), content_type="text/csv",
+    )
+    log.info("exported", device=device_name, rows=rows_written, key=key)
     return key
 
 
