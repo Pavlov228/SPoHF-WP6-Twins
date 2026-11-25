@@ -69,6 +69,7 @@ def create_app(config: TwinConfig) -> FastAPI:
         data_sources=config.data_sources,
         docs_url=settings.docs_url,
         source_url=settings.source_url,
+        app_version=settings.app_version,
     )
 
     @asynccontextmanager

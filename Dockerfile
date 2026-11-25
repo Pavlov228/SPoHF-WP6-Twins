@@ -38,6 +38,11 @@ ENV PATH="/home/appuser/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/home/appuser/app/src"
 ENV PYTHONUNBUFFERED=1
 
+# Build version from CI; open pages compare it via /version. Empty (a local
+# build) disables that check.
+ARG APP_VERSION=""
+ENV WP6_APP_VERSION=${APP_VERSION}
+
 # Expose dashboard port
 EXPOSE 8000
 

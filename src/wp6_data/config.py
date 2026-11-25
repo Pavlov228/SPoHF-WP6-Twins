@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     docs_url: str = "https://spohf.github.io/SPoHF-WP6-Twins/"
     source_url: str = "https://github.com/SPOHF/SPoHF-WP6-Twins"
 
+    # Build version baked into the image by CI (Dockerfile ARG). Open pages poll
+    # /version and badge the favicon when it changes. Empty disables the check,
+    # which is what an un-built local run gets.
+    app_version: str = ""
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"  # "json" or "console"

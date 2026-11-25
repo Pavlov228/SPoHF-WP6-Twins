@@ -148,12 +148,22 @@ def render_page(
         else ""
     )
 
+    # Only a built image knows its version; without one there is nothing to compare.
+    version_attr = (
+        f' data-version="{config._app_version}"' if config._app_version else ""
+    )
+    version_js = (
+        f'<script src="{asset_url("version_watch.js")}"></script>'
+        if config._app_version
+        else ""
+    )
+
     return f"""
     <!DOCTYPE html>
-    <html data-dashboard="{config.require_dashboard_id()}">
+    <html data-dashboard="{config.require_dashboard_id()}"{version_attr}>
     <head>
         <title>{title}</title>
-        <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+        <link rel="icon" id="favicon" href="/static/favicon.svg" type="image/svg+xml">
         <link rel="stylesheet"
               href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
         <script>{THEME_JS}</script>
@@ -173,6 +183,7 @@ def render_page(
         <script>{TOGGLE_JS}</script>
         <script src="{asset_url('table_sort.js')}"></script>
         <script>{EXPLORE_TABS_JS}</script>
+        {version_js}
     </body>
     </html>
     """

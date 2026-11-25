@@ -222,6 +222,19 @@ class TestRenderPage:
         html = render_page("T", "content")
         assert 'data-dashboard="test"' in html
 
+    def test_built_page_carries_its_version_and_watcher(self, monkeypatch):
+        build = "v1.0.1-abc1234"
+        monkeypatch.setattr(templates_config, "_app_version", build)
+        html = render_page("T", "content")
+        assert f'data-version="{build}"' in html
+        assert "version_watch.js" in html
+
+    def test_unbuilt_page_skips_the_version_watch(self, monkeypatch):
+        monkeypatch.setattr(templates_config, "_app_version", "")
+        html = render_page("T", "content")
+        assert "data-version" not in html
+        assert "version_watch.js" not in html
+
     def test_render_without_configuration_fails_loud(self):
         templates_config._dashboard_id = None
         with pytest.raises(RuntimeError, match="configure_dashboard"):
