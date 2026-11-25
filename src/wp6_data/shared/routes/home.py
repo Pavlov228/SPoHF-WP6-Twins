@@ -47,11 +47,11 @@ async def home(
 
         {hero_html}
 
-        {config.home_extra_html}
-
         {render_card(
             "Status &amp; Coverage",
-            '<a href="/status" role="button">View Status</a>',
+            '<div style="display:flex;gap:0.5rem;flex-wrap:wrap">'
+            '<a href="/status" role="button">View Status</a>'
+            f'{config.status_card_extra_html}</div>',
             description="Data coverage timeline and sync status.",
             card_class="card-bg card-bg-status",
         )}

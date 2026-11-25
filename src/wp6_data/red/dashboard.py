@@ -25,7 +25,7 @@ from wp6_data.red.routes import charts as red_charts
 from wp6_data.red.routes.dli_model.train import train_model_from_db
 from wp6_data.red.routes.sijia.card import render_sijia_card
 from wp6_data.red.tsdb import ensure_schema_red
-from wp6_data.shared import render_card
+from wp6_data.shared import icon, render_card
 from wp6_data.shared.app_factory import create_app
 from wp6_data.shared.object_store_health import (
     status_card as object_store_status_card,
@@ -260,10 +260,11 @@ config = TwinConfig(
     hero_cards=[_dli_card, _multi_height_card, _crop_cycles_card, _energy_card],
     status_extras=[render_sijia_card, object_store_status_card],
 
-    home_extra_html=(
+    status_card_extra_html=(
         '<a href="/static/red/sensor_locations.docx" download role="button"'
-        ' class="outline" style="width:100%">'
-        "Download Sensor Device Identification (docx)</a>"
+        ' class="outline" style="display:inline-flex;align-items:center;gap:0.4rem">'
+        f'{icon("download", size=18)}'
+        "Device Identification (docx)</a>"
     ),
     lifespan_startup=_startup,
     lifespan_shutdown=_shutdown,

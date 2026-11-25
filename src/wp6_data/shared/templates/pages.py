@@ -13,23 +13,7 @@ from wp6_data.shared.templates.assets import (
     asset_url,
 )
 from wp6_data.shared.templates.components import render_date_filter
-
-# Inline SVGs for the footer reference links. currentColor lets them inherit the
-# theme text colour and flip in dark mode; the anchor carries the a11y label.
-CODE_ICON_SVG = (
-    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none"'
-    ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
-    ' stroke-linejoin="round" aria-hidden="true">'
-    '<polyline points="16 18 22 12 16 6"/>'
-    '<polyline points="8 6 2 12 8 18"/></svg>'
-)
-DOCS_ICON_SVG = (
-    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none"'
-    ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
-    ' stroke-linejoin="round" aria-hidden="true">'
-    '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>'
-    '<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
-)
+from wp6_data.shared.templates.icons import icon
 
 
 def _render_source_indicator() -> str:
@@ -128,13 +112,13 @@ def render_page(
         footer_links.append(
             f'<a href="{config._source_url}" target="_blank" rel="noopener"'
             f' class="footer-icon" aria-label="Source code" title="Source code">'
-            f"{CODE_ICON_SVG}</a>",
+            f'{icon("code", size=20)}</a>',
         )
     if config._docs_url:
         footer_links.append(
             f'<a href="{config._docs_url}" target="_blank" rel="noopener"'
             f' class="footer-icon" aria-label="Documentation" title="Documentation">'
-            f"{DOCS_ICON_SVG}</a>",
+            f'{icon("docs", size=20)}</a>',
         )
     links_html = (
         f'<div class="footer-links">{"".join(footer_links)}</div>'
@@ -209,27 +193,11 @@ def render_unified_chart_page(
     """
     filter_html = render_date_filter(start, end)
 
-    # Subtle inline glyphs for the chart-type toggle. ``currentColor`` lets each
-    # icon track the button's text colour (incl. the white active state).
-    ct_icon_line = (
-        '<svg class="ct-icon" viewBox="0 0 12 12" aria-hidden="true">'
-        '<polyline points="1,9 4,5 7,7 11,2" fill="none" stroke="currentColor" '
-        'stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>'
-    )
-    ct_icon_scatter = (
-        '<svg class="ct-icon" viewBox="0 0 12 12" aria-hidden="true">'
-        '<circle cx="2.5" cy="8.5" r="1.1" fill="currentColor"/>'
-        '<circle cx="6" cy="5" r="1.1" fill="currentColor"/>'
-        '<circle cx="9.5" cy="6.5" r="1.1" fill="currentColor"/>'
-        '<circle cx="8" cy="2.5" r="1.1" fill="currentColor"/></svg>'
-    )
-    ct_icon_box = (
-        '<svg class="ct-icon" viewBox="0 0 12 12" aria-hidden="true">'
-        '<line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="1.1"/>'
-        '<rect x="3" y="4" width="6" height="4.5" fill="none" stroke="currentColor" '
-        'stroke-width="1.1"/>'
-        '<line x1="3" y1="6.2" x2="9" y2="6.2" stroke="currentColor" stroke-width="1.1"/></svg>'
-    )
+    # Chart-type toggle glyphs. ``currentColor`` lets each icon track the
+    # button's text colour (incl. the white active state).
+    ct_icon_line = icon("chart-line", cls="ct-icon")
+    ct_icon_scatter = icon("chart-scatter", cls="ct-icon")
+    ct_icon_box = icon("chart-box", cls="ct-icon")
 
     content = f"""
     <div class="chart-layout">

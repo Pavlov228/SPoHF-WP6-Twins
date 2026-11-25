@@ -23,6 +23,7 @@ from wp6_data.shared.cycles import (
 from wp6_data.shared.templates import (
     build_explore_tabs,
     default_date_range,
+    icon,
     pill_row,
     render_card,
     render_dashboard_page,
@@ -53,6 +54,7 @@ __all__ = [
     "default_date_range",
     "exposure",
     "generate_cohorts",
+    "icon",
     "Lane",
     "make_bar_chart",
     "make_dual_axis_chart",

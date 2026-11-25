@@ -147,7 +147,8 @@ class TwinConfig:
     status_extras: list[Callable[..., Awaitable[str] | str]] = field(
         default_factory=list,
     )
-    home_extra_html: str = ""
+    #: Extra buttons shown beside "View Status" on the home page's status card.
+    status_card_extra_html: str = ""
     explore_extra_tabs: dict[str, tuple[str, str]] = field(default_factory=dict)
     require_auth: bool = True
     export_sanitise_names: bool = False
