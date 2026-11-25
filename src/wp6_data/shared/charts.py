@@ -743,6 +743,83 @@ def year_point_labels(
     return texts, positions
 
 
+def _year_rows(daily: pd.DataFrame, year: int) -> pd.DataFrame:
+    return daily[[d.year == year for d in daily["date"]]].set_index("date")
+
+
+def _starts_late(first: date) -> bool:
+    """A year whose data begins after January: its running total reads low."""
+    return first.month > 1
+
+
+def _daily_trace(
+    rows: pd.DataFrame, year: int, column: str, label: str, unit: str, colour: str,
+) -> go.Scatter:
+    """One year's daily line, laid on the shared calendar."""
+    suffix = f" {unit}" if unit else ""
+    # Every day between the year's first and last, so a missing day breaks the
+    # line instead of being bridged.
+    first, last = min(rows.index), max(rows.index)
+    days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+    filled = rows.reindex(days)
+    return go.Scatter(
+        x=[d.replace(year=_OVERLAY_YEAR) for d in days],
+        y=filled[column],
+        customdata=[d.isoformat() for d in days],
+        mode="lines",
+        name=str(year),
+        legendgroup=str(year),
+        line={"color": colour, "width": 1.5},
+        connectgaps=False,
+        hovertemplate=f"%{{customdata}}<br>{label}: %{{y:,.0f}}{suffix}<extra></extra>",
+    )
+
+
+def _year_to_date_trace(
+    rows: pd.DataFrame, year: int, column: str, label: str, unit: str, colour: str,
+) -> go.Scatter:
+    """One year's running total, marked and labelled per :func:`year_point_labels`."""
+    suffix = f" {unit}" if unit else ""
+    totals = year_to_date(rows, column)
+    texts, positions = year_point_labels(year, totals, unit)
+    return go.Scatter(
+        x=[d.replace(year=_OVERLAY_YEAR) for d in totals["date"]],
+        y=totals["total"],
+        customdata=list(zip(
+            [d.isoformat() for d in totals["date"]], totals["counted"], totals["elapsed"],
+            totals["added"], strict=True,
+        )),
+        text=texts,
+        textposition=positions,
+        textfont={"color": colour, "size": 11},
+        mode="lines+markers+text",
+        name=f"{year} year to date",
+        legendgroup=str(year),
+        marker={"color": colour, "size": 7, "line": {"color": "white", "width": 1}},
+        line={"color": colour, "width": 1.5},
+        cliponaxis=False,
+        hovertemplate=(
+            f"{year} to %{{customdata[0]}}<br>{label}: %{{y:,}}{suffix} so far"
+            " (+%{customdata[3]:,} since the previous point)"
+            "<br>from %{customdata[1]} of %{customdata[2]} days<extra></extra>"
+        ),
+    )
+
+
+def _year_overlay_layout(fig: go.Figure, height: int) -> None:
+    fig.update_layout(
+        template="plotly_white",
+        height=height,
+        # Room on the right for the final totals' labels.
+        margin={"l": 60, "r": 130, "t": 20, "b": 40},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="closest",
+    )
+    months = [date(_OVERLAY_YEAR, 1, 1), date(_OVERLAY_YEAR, 12, 31)]
+    fig.update_xaxes(tickformat="%b", dtick="M1", range=months)
+
+
 def make_daily_by_year_chart(
     daily: pd.DataFrame,
     column: str,
@@ -765,74 +842,97 @@ def make_daily_by_year_chart(
     running total starts late and would read as a light year. The current year
     is partial at the other end, which is the point of watching it, so it stays.
     """
-    suffix = f" {unit}" if unit else ""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.06, row_heights=[0.55, 0.45],
     )
     years = sorted({d.year for d in daily["date"]})
     for i, year in enumerate(years):
-        rows = daily[[d.year == year for d in daily["date"]]].set_index("date")
+        rows = _year_rows(daily, year)
         colour = CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)]
-        # Every day between the year's first and last, so a missing day breaks
-        # the line instead of being bridged.
-        first, last = min(rows.index), max(rows.index)
-        days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
-        filled = rows.reindex(days)
-        visible: bool | str = "legendonly" if hide_late_starts and first.month > 1 else True
-        fig.add_trace(go.Scatter(
-            x=[d.replace(year=_OVERLAY_YEAR) for d in days],
-            y=filled[column],
-            customdata=[d.isoformat() for d in days],
-            mode="lines",
-            name=str(year),
-            legendgroup=str(year),
-            visible=visible,
-            line={"color": colour, "width": 1.5},
-            connectgaps=False,
-            hovertemplate=f"%{{customdata}}<br>{label}: %{{y:,.0f}}{suffix}<extra></extra>",
-        ), row=1, col=1)
+        visible: bool | str = (
+            "legendonly" if hide_late_starts and _starts_late(min(rows.index)) else True
+        )
+        line = _daily_trace(rows, year, column, label, unit, colour)
+        line.update(visible=visible)
+        fig.add_trace(line, row=1, col=1)
+        total = _year_to_date_trace(rows, year, column, label, unit, colour)
+        total.update(showlegend=False, visible=visible)
+        fig.add_trace(total, row=2, col=1)
 
-        totals = year_to_date(rows, column)
-        texts, positions = year_point_labels(year, totals, unit)
-        fig.add_trace(go.Scatter(
-            x=[d.replace(year=_OVERLAY_YEAR) for d in totals["date"]],
-            y=totals["total"],
-            customdata=list(zip(
-                [d.isoformat() for d in totals["date"]], totals["counted"], totals["elapsed"],
-                totals["added"], strict=True,
-            )),
-            text=texts,
-            textposition=positions,
-            textfont={"color": colour, "size": 11},
-            mode="lines+markers+text",
-            name=f"{year} year to date",
-            legendgroup=str(year),
-            showlegend=False,
-            visible=visible,
-            marker={"color": colour, "size": 7, "line": {"color": "white", "width": 1}},
-            line={"color": colour, "width": 1.5},
-            cliponaxis=False,
-            hovertemplate=(
-                f"{year} to %{{customdata[0]}}<br>{label}: %{{y:,}}{suffix} so far"
-                " (+%{customdata[3]:,} since the previous point)"
-                "<br>from %{customdata[1]} of %{customdata[2]} days<extra></extra>"
-            ),
-        ), row=2, col=1)
-
-    months = [date(_OVERLAY_YEAR, 1, 1), date(_OVERLAY_YEAR, 12, 31)]
-    fig.update_layout(
-        template="plotly_white",
-        height=720,
-        # Room on the right for the final totals' labels.
-        margin={"l": 60, "r": 130, "t": 20, "b": 40},
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        hovermode="closest",
-    )
-    fig.update_xaxes(tickformat="%b", dtick="M1", range=months)
+    _year_overlay_layout(fig, 720)
     unit_note = f" ({unit})" if unit else ""
     fig.update_yaxes(title_text=f"{label} per day{unit_note}", row=1, col=1)
     if daily_range is not None:
         fig.update_yaxes(range=list(daily_range), row=1, col=1)
     fig.update_yaxes(title_text=f"Year to date{unit_note}", rangemode="tozero", row=2, col=1)
     return fig
+
+
+def _stacked_by_year(
+    panels: list[tuple[pd.DataFrame, str, str, str]],
+    trace_for,
+    axis_title,
+    hide_late_starts: bool,
+) -> go.Figure:
+    """One panel per source, years compared in all of them, one shared legend."""
+    years = sorted({d.year for daily, *_ in panels for d in daily["date"]})
+    colours = {y: CATEGORICAL_COLORS[i % len(CATEGORICAL_COLORS)] for i, y in enumerate(years)}
+    firsts = {
+        y: min(d for daily, *_ in panels for d in daily["date"] if d.year == y) for y in years
+    }
+    fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=True, vertical_spacing=0.08)
+    in_legend: set[int] = set()
+    for row, (daily, column, label, unit) in enumerate(panels, start=1):
+        for year in sorted({d.year for d in daily["date"]}):
+            trace = trace_for(_year_rows(daily, year), year, column, label, unit, colours[year])
+            trace.update(
+                name=str(year),
+                showlegend=year not in in_legend,
+                visible="legendonly" if hide_late_starts and _starts_late(firsts[year]) else True,
+            )
+            in_legend.add(year)
+            fig.add_trace(trace, row=row, col=1)
+        fig.update_yaxes(title_text=axis_title(label, unit), row=row, col=1)
+
+    _year_overlay_layout(fig, 360 * len(panels))
+    return fig
+
+
+def _unit_note(unit: str) -> str:
+    return f" ({unit})" if unit else ""
+
+
+def make_year_to_date_chart(
+    panels: list[tuple[pd.DataFrame, str, str, str]],
+    *,
+    hide_late_starts: bool = False,
+) -> go.Figure:
+    """Several running totals stacked, one panel each, years compared in all of them.
+
+    ``panels`` is ``(daily, column, label, unit)`` per panel, as
+    :func:`make_daily_by_year_chart` takes them. The panels share the Jan-Dec
+    axis and one legend: a year has the same colour in every panel, and its
+    legend entry hides it everywhere — so a cold year that also ran the lamps
+    long reads as one story. ``hide_late_starts`` as for
+    :func:`make_daily_by_year_chart`, judged on the year's earliest data in any
+    panel.
+    """
+    fig = _stacked_by_year(
+        panels, _year_to_date_trace,
+        lambda label, unit: f"{label}, year to date{_unit_note(unit)}", hide_late_starts,
+    )
+    fig.update_yaxes(rangemode="tozero")
+    return fig
+
+
+def make_daily_panels_chart(
+    panels: list[tuple[pd.DataFrame, str, str, str]],
+    *,
+    hide_late_starts: bool = False,
+) -> go.Figure:
+    """The per-day lines of several sources stacked, as :func:`make_year_to_date_chart`
+    stacks their totals — same panels, colours and legend, so the two read together."""
+    return _stacked_by_year(
+        panels, _daily_trace,
+        lambda label, unit: f"{label} per day{_unit_note(unit)}", hide_late_starts,
+    )
