@@ -1,0 +1,26 @@
+# Die gemeinsame Hülle: Navigation, Fußzeile, Startseite. Zwillinge bringen eigene Kataloge mit.
+nav:
+  home: Start
+  dashboard: Dashboard
+  chart: Diagramm
+  logout: Abmelden
+  theme_toggle: Dunkelmodus umschalten
+  data_source: "Datenquelle: {label}"
+  language: Sprache
+page:
+  back_home: Start
+  db_not_connected: Datenbank nicht verbunden
+footer:
+  source_code: Quellcode
+  docs: Dokumentation
+home:
+  dashboard:
+    title: Dashboard
+    mine: Mein Dashboard
+    new_chart: Neues Diagramm
+    explore: Entdecken
+    description: Ihre gespeicherten Diagramme auf einen Blick, ein neues Diagramm von Grund auf oder alle Geräte und Sensoren in einer Tabelle.
+  status:
+    title: Status & Abdeckung
+    button: Status ansehen
+    description: Zeitleiste der Datenabdeckung und Synchronisationsstatus.

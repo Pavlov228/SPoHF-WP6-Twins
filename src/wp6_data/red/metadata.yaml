@@ -245,6 +245,123 @@ heating:
   # hottest heating day. Such readings are dropped, so those days are a gap.
   max_pipe: 95
 
+# The greenhouse page's physics (red/greenhouse, CONTEXT "Heat balance"): a
+# quasi-steady energy and vapour balance per time step, from LetsGrow's state.
+# Every number is either CALIBRATED on red's own data (with the script that did
+# it) or LITERATURE (with the source) — see scripts/red_operations/calibrate_physics.py
+# and greenhouse/references.yaml.
+greenhouse:
+  devices:
+    climate: "letsgrow-climate-b4"
+    lamps: "letsgrow-grow-light-b4"
+    water: "letsgrow-water-b4"
+    weather: "letsgrow-weather-station"
+  cover:
+    # LITERATURE: share of outdoor global radiation entering a glasshouse
+    # (glass and structure), the same ~70% the grower's lamp sheet assumes.
+    transmission: 0.70
+    # CALIBRATED: W per m² floor per K, on closed, dark, lamp-free, steady nights
+    # 2023-26 (median 4.7-4.8), against the pipe heat estimated below — so it is
+    # consistent with that estimate rather than with a handbook glass U-value.
+    u_open: 4.8
+    # LITERATURE: outside convection grows with wind (Vanthoor 2011); red's
+    # station data could not resolve it (wind was rarely high on closed nights).
+    u_wind: 0.15
+    # ASSUMED: share of cover loss a closed energy screen saves while closed.
+    # No verified source for 0.40 (an earlier "de Zwart 2010" attribution did
+    # not check out on 2026-11-26; annual savings of a single screen, a
+    # different measure, are reported lower). Red's curtain is logged only
+    # since 2026-05-21: too few closed, vents-shut nights to measure it yet.
+    screen_saving: 0.40
+    # ASSUMED: light a closed energy screen lets through.
+    screen_transmission: 0.75
+    # LITERATURE: share of the sun entering that the crop and floor reflect
+    # back out through the glass — a closed canopy reflects ~5% of PAR and ~40%
+    # of near-infrared (scattering coefficients 0.2 and 0.8, Goudriaan & van
+    # Laar 1994), a fifth to a quarter of the total.
+    reflected_share: 0.25
+    # LITERATURE: cover temperature sits ~30% of the way from outside to inside
+    # air; vapour condenses on it below the dew point, at this mass-transfer
+    # rate (m/s, from h ≈ 3.5 W/m²K over ρc_p).
+    cover_temperature_share: 0.3
+    condensation_rate: 0.003
+  # CALIBRATED: ventilation (m³ air per m² floor per s) against mean vent
+  # opening (0-1), from the vapour balance E ≈ g·(AH_in − AH_out) on hours with
+  # scale-measured transpiration and a cover too warm to condense (2023-26,
+  # ~5,000 hours). Medians per opening band; interpolated between.
+  ventilation:
+    opening: [0.0, 0.06, 0.20, 0.45, 0.80, 1.0]
+    rate: [0.0021, 0.0034, 0.0060, 0.0105, 0.0135, 0.0150]
+  lamps:
+    par: 257.3           # µmol/m²/s at 100%, grower's Block B sheet
+    radiation_eq: 64.46  # J/cm² outdoor-equivalent per full lamp-hour, same sheet
+    # ASSUMED: LED efficacy is not on the sheet. Used only for the lamps' heat
+    # in the balance (all electrical power ends as heat); no energy bills.
+    efficacy: 3.0
+  pipes:
+    # ASSUMED geometry (GreenLight's reference greenhouse; red's own pipes are not
+    # confirmed): heat after Bot (1983)
+    # convection 1.99·π·d·L·ΔT^1.32 plus long-wave radiation.
+    - tag: lg_pipe_lower
+      label: "Pipe rail (lower circuit)"
+      diameter: 0.051
+      length: 1.25
+    - tag: lg_pipe_growth
+      label: "Growth pipe"
+      diameter: 0.035
+      length: 1.655
+  # CALIBRATED: the substrate scale gains 4.0-4.3 kg per l/m² irrigated, so it
+  # weighs ~4 m² of crop; between pulses −ΔW/4 is transpiration.
+  scale_area_m2: 4.0
+  # CALIBRATED (OLS on ~17,000 clean scale-hours, 2023-26): the transpiration
+  # shape used between clean scale readings, ml/m²/h. Weak hour by hour
+  # (R² 0.17); the day's total always comes from the water balance instead.
+  transpiration:
+    intercept: 32.3
+    per_sun_w: 0.149     # per W/m² of sun inside
+    per_lamp_w: 0.609    # per W/m² of lamp power
+    per_hd: 1.602        # per g/m³ humidity deficit
+    per_pipe_w: 0.123    # per W/m² of pipe heat
+  advice:
+    light_target_jcm2: 1000   # the grower's rule
+    dark_min_h: 6             # the grower's rule
+    wake_lamp_h: 0.5          # activity lost per switch-on (substrate scale)
+    sun_max_w: 300            # no lamps above this outside radiation
+    humid_rh: 90              # RH counted as humid
+    humid_hours_target: 3     # a day above this is humid; far below costs heat
+    vent_open_pct: 10         # vents count as open above this
+    dry_rh: 85                # below this, venting is not for humidity
+    co2_lamp_floor_ppm: 600   # CO₂ in lamp hours below this flags light-use
+  # Where each number above comes from, as the /greenhouse page shows it next to
+  # the value ("configured" popups): calibrated on red's data, literature,
+  # assumed, the grower's own figure or rule, or a threshold the twin chose.
+  # A block name covers all its settings unless a setting is listed itself.
+  provenance:
+    cover.transmission: literature
+    cover.u_open: calibrated
+    cover.u_wind: literature
+    cover.screen_saving: assumed
+    cover.screen_transmission: assumed
+    cover.reflected_share: literature
+    cover.cover_temperature_share: literature
+    cover.condensation_rate: literature
+    ventilation: calibrated
+    lamps.par: grower
+    lamps.radiation_eq: grower
+    lamps.efficacy: assumed
+    pipes: assumed
+    scale_area_m2: calibrated
+    transpiration: calibrated
+    advice.light_target_jcm2: grower
+    advice.dark_min_h: grower
+    advice.wake_lamp_h: calibrated
+    advice.sun_max_w: twin
+    advice.humid_rh: twin
+    advice.humid_hours_target: twin
+    advice.vent_open_pct: twin
+    advice.dry_rh: twin
+    advice.co2_lamp_floor_ppm: twin
+
 sensor_defaults:
   temp:
     type: "temperature"

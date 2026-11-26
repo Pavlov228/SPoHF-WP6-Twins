@@ -1,0 +1,26 @@
+# The shared shell: navigation, footer, home page. Twins bring their own catalogues.
+nav:
+  home: Home
+  dashboard: Dashboard
+  chart: Chart
+  logout: Logout
+  theme_toggle: Toggle dark mode
+  data_source: "Data source: {label}"
+  language: Language
+page:
+  back_home: Home
+  db_not_connected: Database not connected
+footer:
+  source_code: Source code
+  docs: Documentation
+home:
+  dashboard:
+    title: Dashboard
+    mine: My Dashboard
+    new_chart: New Chart
+    explore: Explore
+    description: Your bookmarked charts in one view, a new chart from scratch, or every device and sensor in one table.
+  status:
+    title: Status & Coverage
+    button: View Status
+    description: Data coverage timeline and sync status.

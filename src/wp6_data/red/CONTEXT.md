@@ -50,6 +50,35 @@ _Why the measured pipe, not the request_: the `_calc` request tags sit at a 20 �
 _Sensor faults_: a pipe reading above `max_pipe` (95 °C; a hot-water loop stays below that, and the real maximum seen is ~85) is dropped, so its day becomes a gap. Over 2023–2026 that catches exactly one fault: the growing pipe at a flat 150 °C for 31 h on 30 Jun – 1 Jul 2024, which otherwise drew as the year's hottest heating day.
 _Relative_: both circuits weigh equally and no pipe size, boiler efficiency or gas price is in it. Those are constants to multiply in later (kWh/m² → m³ gas → €); the shape will not change.
 
+**Heat balance**:
+The `/greenhouse` page's physics (`red/greenhouse/physics.py`): every 15 minutes, the heat coming in — sun kept inside (through the glass, less what the crop reflects back out), the lamps' electrical power, and the **pipe heat** — set against the heat going out through the cover, with the ventilation air, and as evaporated water. Quasi-steady: no heat capacity is modelled, so storage lands in the **Residual**. Every parameter in `metadata.yaml` `greenhouse` is marked CALIBRATED (with the script that did it) or LITERATURE (with the source).
+_Pipe heat_: estimated from the measured pipe temperature against the air (Bot 1983 convection plus radiation, GreenLight's pipe geometry) — an estimate in W/m², unlike the relative **Heat-output index**. Both follow the same pipes; the index compares days, the pipe heat is booked against the losses.
+_Calibrated on red_: the cover's loss (4.8 W/m² floor per K, closed dark nights) and the ventilation curve (air exchange against vent opening, from the vapour the crop measurably transpires having to leave with the air).
+_Avoid_: euros. The page has none: the energy contract and the crop's value are unknown, so heat stays in MJ/m², light in J/cm² and lamps in lamp-hours. The lamps' heat rests on an assumed LED efficacy, the pipe heat on an assumed pipe geometry; neither is a meter reading.
+
+**Residual**:
+What the **Heat balance** does not account for: heat the air, crop and structure store or release, plus model error. Shown, never hidden or spread over the other flows. Small on winter days (~2% of the heat in on 20 Nov 2026), large on sunny summer days, when wide-open vents move more air than the night-calibrated ventilation curve knows.
+
+**What-if**:
+The **Heat balance** under other vent, screen or lamp settings, holding the air temperature LetsGrow measured: how much pipe heat would that have needed, and what humidity would it have left. Reported as a change against the balance under the real settings, so the model's own offset cancels.
+_Avoid_: calling a what-if a forecast — it replays a day that happened.
+
+**Crop activity**:
+The crop's transpiration as the substrate scale measures it: between irrigation pulses, once the slab has stopped draining, the scale's weight loss over the ~4 m² it carries (4.0-4.3 kg per l/m² irrigated, `scale_area_m2`). Where pulses disturb the scale, a configured shape fills in, scaled so the day matches the water balance (irrigation − drain − weight change).
+_Wake-up_: after lamps switch on in the dark, or sunrise, the time transpiration has covered half the way from its level before to its plateau 2-4 h later — ~20-60 minutes. Each switch-on therefore costs ~0.5 lamp-hour of activity, which the lamp planner charges.
+_Avoid_: LetsGrow's "water uptake" for activity — it is irrigation minus drain, and the drain gauge lags the pulses by hours.
+
+**Prescription** (advice):
+What the twin would have done differently on a day (`red/greenhouse/advice.py`), each tied to one greenhouse component (lamps, pipes, vents, screen, crop, substrate) and sized in physical units (MJ/m² of pipe heat, lamp-hours, J/cm², hours). Graded act / consider / note / ok; a rule with nothing to say says "ok", so a quiet day reads as checked. For a past day it is a replay ("would have advised"); only tomorrow's light looks forward.
+
+**Day length**:
+The hours of light in a calendar day: natural light (outside radiation above 0 — LetsGrow's station reads 0 until the sun is ~5° up, so it is shorter than sunrise-to-sunset) plus the hours the lamps ran with no sun. The rest is dark; the longest unbroken dark spell may cross midnight and must last at least `dark_min_h` (the grower's rest rule).
+_Lamp-hours the target needed_: the fewest whole lamp-hours that bring the day's sun to `light_target_jcm2` under the dark rule, the sun cut-off and the wake-up cost — the planner with every hour costing the same. Lamp-hours beyond it serve the longest-day rule.
+
+**Measuring spot**:
+Where LetsGrow measures the inside: one measuring box (air temperature, RH, CO₂) and one scale under one gutter section (weight, so transpiration). Lamps, pipes, vents and screen are set for the whole block. Everything the twin says about air and crop therefore rests on one spot while the actuators act everywhere; microclimates (walls, gables, under open vents, over the pipe rail) are invisible to it. The `/greenhouse` view greys the crop beyond a ring around the spot; the ring's radius is an illustration, not a measured representativeness. The box's real position is not logged.
+_Avoid_: reading a greenhouse temperature as the block's temperature.
+
 **Position**:
 A labelled location/zone in the greenhouse a sensor belongs to (e.g. "B"). Horizontal placement, not vertical. Declared per device in `metadata.yaml` and used only to group the explorer's device table; every red device currently shares one position, so the field is declared but not yet discriminating.
 _Avoid_: height (height is vertical — see below).

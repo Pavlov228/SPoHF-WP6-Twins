@@ -1,0 +1,26 @@
+# De gedeelde schil: navigatie, voettekst, startpagina. Tweelingen hebben hun eigen catalogi.
+nav:
+  home: Start
+  dashboard: Dashboard
+  chart: Grafiek
+  logout: Uitloggen
+  theme_toggle: Donkere modus aan/uit
+  data_source: "Gegevensbron: {label}"
+  language: Taal
+page:
+  back_home: Start
+  db_not_connected: Database niet verbonden
+footer:
+  source_code: Broncode
+  docs: Documentatie
+home:
+  dashboard:
+    title: Dashboard
+    mine: Mijn dashboard
+    new_chart: Nieuwe grafiek
+    explore: Verkennen
+    description: Je bewaarde grafieken in één overzicht, een nieuwe grafiek vanaf nul, of alle apparaten en sensoren in één tabel.
+  status:
+    title: Status & dekking
+    button: Status bekijken
+    description: Tijdlijn van de gegevensdekking en de synchronisatiestatus.

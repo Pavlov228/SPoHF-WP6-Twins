@@ -1,0 +1,199 @@
+# Literature behind the /greenhouse explanations and advice.
+#
+# The catalogues (red/i18n/<lang>.yaml) cite these as [^id] markers in the prose;
+# the page numbers the markers per balloon and lists the sources under it, so a
+# claim on the page can be followed to where it comes from. Citations are not
+# translated.
+#
+# `checked` says how far each source was verified on 2026-11-26:
+#   full     — read (via the research's literature review, tag [R])
+#   abstract — the abstract or publisher record supports the claim as cited
+#   record   — the bibliographic record (authors, venue, DOI/URL) is confirmed;
+#              the cited point rests on a secondary summary
+# A number on the page that is the twin's own setting or red's own calibration is
+# NOT footnoted to literature; the prose says so instead.
+
+references:
+  nederhoff1994:
+    label: Nederhoff 1994
+    cite: >-
+      Nederhoff E.M. (1994). Effects of CO₂ concentration on photosynthesis, transpiration and
+      production of greenhouse fruit vegetable crops. PhD thesis, Wageningen University.
+    url: https://edepot.wur.nl/206000
+    checked: abstract  # light-use efficiency +10-15% per +100 ppm CO₂; production effect larger than the photosynthesis rule
+  marcelis2006:
+    label: Marcelis et al. 2006
+    cite: >-
+      Marcelis L.F.M., Broekhuijsen A.G.M., Meinen E., Nijs E.M.F.M., Raaphorst M.G.M. (2006).
+      Quantification of the growth response to light quantity of greenhouse grown crops.
+      Acta Horticulturae 711:97–104.
+    url: https://doi.org/10.17660/ActaHortic.2006.711.9
+    checked: abstract  # +1% light → +0.7-1% fruit (fruit vegetables); larger at high CO₂ and low light
+  noaa_aggi:
+    label: NOAA GML 2026
+    cite: >-
+      NOAA Global Monitoring Laboratory (2026). The NOAA Annual Greenhouse Gas Index (AGGI):
+      global mean CO₂ 425.6 ppm in 2025.
+    url: https://gml.noaa.gov/aggi/aggi.html
+    checked: record
+  flinterman2015:
+    label: Flinterman 2015
+    cite: >-
+      Flinterman A. (2015). Optimalisatie huidige belichting. Workshop slides, LichtEvent
+      9 Dec 2015, Hortilux Schréder; hosted by Glastuinbouw Nederland.
+    url: https://www.glastuinbouwnederland.nl/content/user_upload/Optimalisatie_huidige_belichting_-_Andre_Flinterman.pdf
+    checked: full  # "tomaten hebben minimaal 1000 joules per dag nodig"
+  velezramirez2014:
+    label: Velez-Ramirez 2014
+    cite: >-
+      Velez-Ramirez A.I. (2014). Continuous light on tomato: from gene to yield. PhD thesis,
+      Wageningen University (incl. Velez-Ramirez et al. 2012, Acta Horticulturae 956:51–58).
+    url: https://edepot.wur.nl/312846
+    checked: full  # ~6 h darkness needed; 18 h the practical maximum; injury under continuous light
+  dueck2007:
+    label: Dueck et al. 2007
+    cite: >-
+      Dueck T., Meinen E., Steenhuizen J., Muusers R., Uenk D., Marcelis L. (2007). Belichting
+      tomaat: elk belichtingsuur volledig benutten. Nota 439, Wageningen UR Glastuinbouw.
+    url: https://edepot.wur.nl/20530
+    checked: full  # equal light sum: 15 h beat 18 h by 7%; capacity builds ~30 min after switch-on
+  vantongerlo2025:
+    label: van Tongerlo et al. 2025
+    cite: >-
+      van Tongerlo E., Trouwborst G., van Steekelenburg G., Jochems S., Hogewoning S.,
+      Dieleman A. (2025). Denkkader energiezuinige belichtingsstrategieën met LED. Rapport
+      WPR-1375, Wageningen University & Research.
+    url: https://doi.org/10.18174/680745
+    checked: full  # shorten the day in the evening, not the morning (sugar starvation, fruit set)
+  vanhoogdalem2022:
+    label: van Hoogdalem et al. 2022
+    cite: >-
+      van Hoogdalem M., Weerheim K., de Gelder A., Dieleman A. (2022). LEDs: het pad naar de
+      praktijk – een roadmap voor tomaat. Rapport WPR-1138, Wageningen University & Research.
+    url: https://doi.org/10.18174/575025
+    checked: full  # tomato leaf photosynthesis levels off above ~500 µmol/m²/s (sun + lamp)
+  kusuma2020:
+    label: Kusuma et al. 2020
+    cite: >-
+      Kusuma P., Pattison P.M., Bugbee B. (2020). From physics to fixtures to food: current and
+      potential LED efficacy. Horticulture Research 7:56.
+    url: https://doi.org/10.1038/s41438-020-0283-7
+    checked: abstract  # practical limit of current LEDs ~3.4 (white+red) to 4.1 (blue+red) µmol/J
+  katzin2021:
+    label: Katzin et al. 2021
+    cite: >-
+      Katzin D., Marcelis L.F.M., van Mourik S. (2021). Energy savings in greenhouses by
+      transition from high-pressure sodium to LED lighting. Applied Energy 281:116019.
+    url: https://doi.org/10.1016/j.apenergy.2020.116019
+    checked: full  # commercial LEDs modelled at 3.0 µmol/J (2020)
+  katzin2020:
+    label: Katzin et al. 2020
+    cite: >-
+      Katzin D., van Mourik S., Kempkes F., van Henten E.J. (2020). GreenLight – An open source
+      model for greenhouses with supplemental lighting: Evaluation of heat requirements under
+      LED and HPS lamps. Biosystems Engineering 194:61–81.
+    url: https://doi.org/10.1016/j.biosystemseng.2020.03.010
+    checked: full  # pipe-rail and grow-pipe circuits; pipe geometry of the reference greenhouse
+  vanthoor2011a:
+    label: Vanthoor et al. 2011
+    cite: >-
+      Vanthoor B.H.E., Stanghellini C., van Henten E.J., de Visser P.H.B. (2011). A methodology
+      for model-based greenhouse design: Part 1, a greenhouse climate model for a broad range of
+      designs and climates. Biosystems Engineering 110(4):363–377.
+    url: https://doi.org/10.1016/j.biosystemseng.2011.06.001
+    checked: record  # pipe convection after Bot (1983); outside cover convection rising with wind
+  goudriaan1994:
+    label: Goudriaan & van Laar 1994
+    cite: >-
+      Goudriaan J., van Laar H.H. (1994). Modelling Potential Crop Growth Processes: Textbook
+      with Exercises. Current Issues in Production Ecology 2. Springer, Dordrecht.
+    url: https://doi.org/10.1007/978-94-011-0750-1
+    checked: record  # canopy reflection: low for PAR, high for near-infrared
+  dezwart2021:
+    label: de Zwart 2021
+    cite: >-
+      de Zwart F. (2021). Energiezuinige ontvochtiging (annotated presentation). Wageningen
+      University & Research, Glastuinbouw.
+    url: https://edepot.wur.nl/590933
+    checked: full  # dehumidification is the largest energy use after lighting; venting vs heating
+  degelder2016:
+    label: de Gelder 2016
+    cite: >-
+      de Gelder A. (2016). Verdamping: balans tussen noodzaak en overmaat. Rapport GTB-1383,
+      Wageningen UR Glastuinbouw (Kas als Energiebron).
+    url: https://edepot.wur.nl/370951
+    checked: full  # transpiration from the slope of a weighing gutter between irrigations
+  bakker1991:
+    label: Bakker 1991
+    cite: >-
+      Bakker J.C. (1991). Analysis of humidity effects on growth and production of glasshouse
+      fruit vegetables. PhD thesis, Wageningen University.
+    url: https://edepot.wur.nl/206443
+    checked: abstract  # continuously high humidity cut yield and leaf area via Ca deficiency
+  baptista2012:
+    label: Baptista et al. 2012
+    cite: >-
+      Baptista F.J., Bailey B.J., Meneses J.F. (2012). Effect of nocturnal ventilation on the
+      occurrence of Botrytis cinerea in Mediterranean unheated tomato greenhouses. Crop
+      Protection 32:144–149.
+    url: https://doi.org/10.1016/j.cropro.2011.11.005
+    checked: abstract  # Botrytis risk defined by the duration of RH > 90%; venting lowered it
+  korner2003:
+    label: Körner 2003
+    cite: >-
+      Körner O. (2003). Crop based climate regimes for energy saving in greenhouse cultivation.
+      PhD thesis, Wageningen University.
+    url: https://edepot.wur.nl/27517
+    checked: full  # crop-based humidity limits saved 18% vs a fixed 80% RH setpoint
+  rezvani2020:
+    label: Rezvani et al. 2020
+    cite: >-
+      Rezvani S.M., Zare Abyaneh H., Shamshiri R.R., Balasundram S.K., Dworak V., Goodarzi M.,
+      Sultan M., Mahns B. (2020). IoT-based sensor data fusion for determining optimality
+      degrees of microclimate parameters in commercial greenhouse production of tomato.
+      Sensors 20(22):6474.
+    url: https://doi.org/10.3390/s20226474
+    checked: abstract  # 20-node grid in a commercial tomato greenhouse: horizontal T/RH differences
+  wur_wireless:
+    label: WUR, wireless sensors
+    cite: >-
+      Wageningen University & Research. A better greenhouse climate thanks to wireless sensors
+      (106 ventilated sensors at crop height to find warm, cold and humid spots).
+    url: https://www.wur.nl/en/research-results/show/a-better-greenhouse-climate-thanks-to-wireless-sensors.htm
+    checked: record
+  fao56:
+    label: Allen et al. 1998 (FAO-56)
+    cite: >-
+      Allen R.G., Pereira L.S., Raes D., Smith M. (1998). Crop evapotranspiration — Guidelines
+      for computing crop water requirements. FAO Irrigation and Drainage Paper 56, FAO, Rome.
+      Chapter 3: meteorological data.
+    url: https://www.fao.org/4/x0490e/x0490e07.htm
+    checked: abstract  # λ = 2.45 MJ/kg (at ~20 °C) and c_p = 1.013 kJ/kg/K, stated in chapter 3
+
+# Which explanation (greenhouse.explain.<key>) and advice (greenhouse.advice.<rule>.<variant>)
+# cites what — the same ids as the [^id] markers in their prose; a test can keep the two in step.
+footnotes:
+  explain:
+    co2: [nederhoff1994, marcelis2006, noaa_aggi]
+    rh_in: [baptista2012, bakker1991]
+    rh_out: [dezwart2021]
+    humid_h: [korner2003]
+    radiation: [vanhoogdalem2022]
+    wind: [vanthoor2011a]
+    t_in: [rezvani2020, wur_wireless]
+    sensors: [rezvani2020, wur_wireless]
+    lamp_power: [katzin2021, kusuma2020]
+    light_sum: [flinterman2015, marcelis2006]
+    day_length: [velezramirez2014, dueck2007]
+    dark: [velezramirez2014, vantongerlo2025]
+    wake: [dueck2007]
+    pipe_heat: [vanthoor2011a, katzin2020]
+    cover: [vanthoor2011a]
+    sun: [goudriaan1994]
+    transpiration: [degelder2016]
+    evaporation: [fao56]
+    ventilation: [fao56]
+  advice:
+    co2.low: [nederhoff1994]
+    humidity.humid: [baptista2012, bakker1991, dezwart2021]
+    dark.short: [velezramirez2014, vantongerlo2025]
