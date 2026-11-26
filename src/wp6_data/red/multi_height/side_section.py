@@ -48,14 +48,18 @@ MEASUREMENT_STYLES = {
 }
 DEFAULT_STYLE = MEASUREMENT_STYLES["temp"]
 CELL_PX = 12
+REPLAY_CELL_PX = 36  # coarse: every frame carries its own grid, so the page stays small
 SCALE_PAD_SHARE = 0.05
 BOX_H_PX = 18
 
 
 @dataclass(frozen=True)
 class NodeReading:
+    """``stale``: too old for its replay frame; shown greyed, never interpolated."""
+
     value: float
     time: pd.Timestamp
+    stale: bool = False
 
 
 @dataclass(frozen=True)
@@ -115,15 +119,17 @@ def place_nodes(
 ### Interpolation ###
 def usable(reading: NodeReading | None, style: MeasurementStyle) -> bool:
     """Whether a reading takes part in the interpolation (see ``zero_is_dead``)."""
-    return reading is not None and not (style.zero_is_dead and reading.value == 0)
+    if reading is None or reading.stale:
+        return False
+    return not (style.zero_is_dead and reading.value == 0)
 
 
-def _grid(layout: SectionLayout) -> tuple[np.ndarray, np.ndarray]:
+def _grid(layout: SectionLayout, cell_px: float = CELL_PX) -> tuple[np.ndarray, np.ndarray]:
     area = layout.area
-    cols = int(np.ceil(area["width"] / CELL_PX))
-    rows = int(np.ceil(area["height"] / CELL_PX))
-    xs = area["x"] + (np.arange(cols) + 0.5) * CELL_PX
-    ys = area["y"] + (np.arange(rows) + 0.5) * CELL_PX
+    cols = int(np.ceil(area["width"] / cell_px))
+    rows = int(np.ceil(area["height"] / cell_px))
+    xs = area["x"] + (np.arange(cols) + 0.5) * cell_px
+    ys = area["y"] + (np.arange(rows) + 0.5) * cell_px
     return xs, ys
 
 
@@ -144,7 +150,10 @@ def colour_range(
 
 
 def interpolate_section(
-    nodes: list[PlacedNode], layout: SectionLayout, style: MeasurementStyle,
+    nodes: list[PlacedNode],
+    layout: SectionLayout,
+    style: MeasurementStyle,
+    cell_px: float = CELL_PX,
 ) -> np.ndarray | None:
     """Linear along the wires, linear down the heights.
 
@@ -152,7 +161,7 @@ def interpolate_section(
     or missing height is bridged); columns beyond the outer wires take the
     nearest wire's profile. ``None`` when no wire has a usable reading.
     """
-    xs, ys = _grid(layout)
+    xs, ys = _grid(layout, cell_px)
     profiles = []
     for node in sorted(nodes, key=lambda n: n.x):
         heights = [h for h in sorted(node.readings) if usable(node.readings[h], style)]
@@ -186,7 +195,73 @@ def render_side_svg(
     """Inline SVG: blurred interpolated field, then a column per wire on top."""
     style = MEASUREMENT_STYLES.get(measurement, DEFAULT_STYLE)
     scale = colour_range(nodes, style)
-    field = interpolate_section(nodes, layout, style)
+    field, wires = _layers(nodes, layout, style, scale, CELL_PX)
+    return _compose(layout, label, unit, style, scale, CELL_PX, [field], [wires])
+
+
+def render_replay_svg(
+    frames: list[list[PlacedNode]],
+    layout: SectionLayout,
+    measurement: str,
+    label: str,
+    unit: str,
+    scale: tuple[float, float] | None,
+    selected: int = 0,
+    cell_px: float = REPLAY_CELL_PX,
+) -> str:
+    """One SVG holding every frame; the chrome and legend are drawn once.
+
+    Each frame is two groups sharing ``data-i`` (its field, and its wire boxes
+    above the outline); the browser only toggles which are visible. ``scale`` is
+    the one colour scale for the whole window.
+    """
+    style = MEASUREMENT_STYLES.get(measurement, DEFAULT_STYLE)
+    fields, wires = [], []
+    for i, nodes in enumerate(frames):
+        f, w = _layers(nodes, layout, style, scale, cell_px)
+        hidden = "" if i == selected else ' style="display:none"'
+        fields.append(f'<g class="rf" data-i="{i}"{hidden}>{f}</g>')
+        wires.append(f'<g class="rf" data-i="{i}"{hidden}>{w}</g>')
+    return _compose(layout, label, unit, style, scale, cell_px, fields, wires)
+
+
+def _layers(
+    nodes: list[PlacedNode],
+    layout: SectionLayout,
+    style: MeasurementStyle,
+    scale: tuple[float, float] | None,
+    cell_px: float,
+) -> tuple[str, str]:
+    """(interpolated field, wire boxes) for one set of nodes."""
+    area = layout.area
+    field = interpolate_section(nodes, layout, style, cell_px)
+    field_svg = ""
+    if field is not None and scale is not None:
+        cells = []
+        for r, row in enumerate(field):
+            for c, value in enumerate(row):
+                cells.append(
+                    f'<rect x="{area["x"] + c * cell_px:g}" y="{area["y"] + r * cell_px:g}" '
+                    f'width="{cell_px + 0.5:g}" height="{cell_px + 0.5:g}" '
+                    f'fill="{value_to_color(value, *scale, colorscale=style.colorscale)}"/>'
+                )
+        field_svg = (
+            '<g clip-path="url(#section-clip)"><g filter="url(#section-blur)">'
+            + "".join(cells) + "</g></g>"
+        )
+    return field_svg, "".join(_wire_svg(n, layout, style.decimals) for n in nodes)
+
+
+def _compose(
+    layout: SectionLayout,
+    label: str,
+    unit: str,
+    style: MeasurementStyle,
+    scale: tuple[float, float] | None,
+    cell_px: float,
+    fields: list[str],
+    wires: list[str],
+) -> str:
     area = layout.area
     parts = [
         f'<svg viewBox="0 0 {layout.width:g} {layout.height:g}" width="100%" '
@@ -196,31 +271,20 @@ def render_side_svg(
         f'<clipPath id="section-clip"><rect x="{area["x"]:g}" y="{area["y"]:g}" '
         f'width="{area["width"]:g}" height="{area["height"]:g}" rx="3"/></clipPath>'
         '<filter id="section-blur" x="-5%" y="-5%" width="110%" height="110%">'
-        f'<feGaussianBlur stdDeviation="{CELL_PX / 2:g}"/></filter>'
+        f'<feGaussianBlur stdDeviation="{cell_px / 2:g}"/></filter>'
         '</defs>',
         f'<rect x="{area["x"]:g}" y="{area["y"]:g}" width="{area["width"]:g}" '
         f'height="{area["height"]:g}" rx="3" fill="#f3f4f6"/>',
-    ]
-    if field is not None and scale is not None:
-        parts.append('<g clip-path="url(#section-clip)"><g filter="url(#section-blur)">')
-        for r, row in enumerate(field):
-            for c, value in enumerate(row):
-                parts.append(
-                    f'<rect x="{area["x"] + c * CELL_PX:g}" y="{area["y"] + r * CELL_PX:g}" '
-                    f'width="{CELL_PX + 0.5:g}" height="{CELL_PX + 0.5:g}" '
-                    f'fill="{value_to_color(value, *scale, colorscale=style.colorscale)}"/>'
-                )
-        parts.append("</g></g>")
-    parts.append(
+        *fields,
         f'<rect x="{area["x"]:g}" y="{area["y"]:g}" width="{area["width"]:g}" '
-        f'height="{area["height"]:g}" rx="3" fill="none" stroke="#374151" stroke-width="2"/>'
-    )
+        f'height="{area["height"]:g}" rx="3" fill="none" stroke="#374151" stroke-width="2"/>',
+    ]
     for h in WIRE_SENSOR_HEIGHTS:
         parts.append(
             f'<text x="{area["x"] + 4:g}" y="{section_y(h, layout) + 4:g}" font-size="10" '
             f'fill="#374151">H{h}</text>'
         )
-    parts.extend(_wire_svg(n, layout, style.decimals) for n in nodes)
+    parts.extend(wires)
     if scale is not None:
         parts.append(_legend_svg(layout, scale, style, unit))
     parts.append("</svg>")
@@ -240,13 +304,14 @@ def _wire_svg(node: PlacedNode, layout: SectionLayout, decimals: int) -> str:
     for h in WIRE_SENSOR_HEIGHTS:
         reading = node.readings.get(h)
         text = f"{reading.value:.{decimals}f}" if reading else "—"
+        fill, ink = ("#e5e7eb", "#9ca3af") if reading and reading.stale else ("white", "#111827")
         y = section_y(h, layout)
         out.append(
             f'<rect x="{x0:g}" y="{y - BOX_H_PX / 2:g}" width="{layout.node_width:g}" '
-            f'height="{BOX_H_PX:g}" rx="4" fill="white" fill-opacity="0.95" '
+            f'height="{BOX_H_PX:g}" rx="4" fill="{fill}" fill-opacity="0.95" '
             'stroke="#111827" stroke-width="1"/>'
             f'<text x="{node.x:g}" y="{y + 4:g}" text-anchor="middle" font-size="12" '
-            f'font-weight="700" fill="#111827">{text}</text>'
+            f'font-weight="700" fill="{ink}">{text}</text>'
         )
     return "".join(out)
 

@@ -257,3 +257,43 @@ class TestSideSectionPage:
 
         assert resp.status_code == 200
         assert "No wire has reported temperature" in resp.text
+
+
+class TestSideSectionReplay:
+    FRAME = {"WS_01_02": [27.4, 26.8, 26.1, 25.3, 24.6],
+             "WS_01_03": [28.1, 27.3, 26.6, 25.8, 25.0]}
+    # DAY is 12:00Z; readings exist at 11:00Z (10 lower) and 12:00Z.
+    WINDOW = {"from": "2026-08-12T09:00:00Z", "to": "2026-08-12T12:00:00Z"}
+
+    def test_replay_has_slider_play_and_one_group_per_frame(self, client):
+        resp = client(_frame(self.FRAME)).get(SIDE_PATH, params=self.WINDOW)
+
+        assert resp.status_code == 200
+        assert 'type="range"' in resp.text and "replay-play" in resp.text
+        assert resp.text.count('data-i="12"') == 2  # field + wires; 13 frames at 15 min
+        assert 'data-i="13"' not in resp.text
+
+    def test_frames_before_the_newest_reading_show_the_older_one(self, client):
+        # The stub has 11:00Z (10 lower) and 12:00Z readings: early frames show the old one.
+        resp = client(_frame(self.FRAME)).get(SIDE_PATH, params=self.WINDOW)
+
+        assert "17.4" in resp.text and "27.4" in resp.text
+
+    def test_at_selects_the_opening_frame(self, client):
+        resp = client(_frame(self.FRAME)).get(
+            SIDE_PATH, params={**self.WINDOW, "at": "2026-08-12T12:00:00Z"},
+        )
+
+        assert 'value="12"' in resp.text
+
+    def test_bad_from_falls_back_to_the_latest_reading(self, client):
+        resp = client(_frame(self.FRAME)).get(SIDE_PATH, params={"from": "nonsense"})
+
+        assert resp.status_code == 200
+        assert "27.4" in resp.text and 'type="range"' not in resp.text
+
+    def test_empty_window_says_so(self, client):
+        resp = client(_frame({})).get(SIDE_PATH, params=self.WINDOW)
+
+        assert resp.status_code == 200
+        assert "in this window" in resp.text or "No wire has reported" in resp.text
