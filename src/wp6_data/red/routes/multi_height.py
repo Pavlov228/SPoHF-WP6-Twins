@@ -101,7 +101,7 @@ MULTI_HEIGHT_VIEWS = [
         "href": "/multi_height/side-section",
         "title": "Side Section of Wires",
         "label": "Open view",
-        "description": "Latest PAR, temperature, humidity and CO? at every height of "
+        "description": "Latest PAR, temperature, humidity and CO₂ at every height of "
         "every wire, as a cross-section of the greenhouse.",
     },
     {
