@@ -22,7 +22,7 @@ red_home:
     title: Meerdere hoogtes
     button: Weergaven per hoogte
     description: Overzicht van sensorgegevens op meerdere hoogtes.
-  sensor_docx: Sensoroverzicht downloaden (docx)
+  sensor_docx: Apparaatoverzicht (docx)
 
 greenhouse:
   page:

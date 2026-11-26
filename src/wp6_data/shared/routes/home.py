@@ -29,8 +29,8 @@ async def home(
             result = await result
         hero_html_parts.append(result)
     hero_html = "\n".join(hero_html_parts)
-    extra = config.home_extra_html
-    extra_html = extra() if callable(extra) else extra
+    extra = config.status_card_extra_html
+    status_extra = extra() if callable(extra) else extra
 
     content = f"""
         <h1>{config.title}</h1>
@@ -49,11 +49,11 @@ async def home(
 
         {hero_html}
 
-        {extra_html}
-
         {render_card(
             th("home.status.title"),
-            f'<a href="/status" role="button">{th("home.status.button")}</a>',
+            '<div style="display:flex;gap:0.5rem;flex-wrap:wrap">'
+            f'<a href="/status" role="button">{th("home.status.button")}</a>'
+            f'{status_extra}</div>',
             description=th("home.status.description"),
             card_class="card-bg card-bg-status",
         )}

@@ -2,7 +2,8 @@
 
 Split into: :mod:`.config` (per-process dashboard identity),
 :mod:`.assets` (CSS/JS loaded from ``static/shared/``),
-:mod:`.components` (cards, tables, tabs, filters) and
+:mod:`.components` (cards, tables, tabs, filters), :mod:`.icons`
+(inline SVG icons) and
 :mod:`.pages` (full-page renderers). This package re-exports the public
 surface so ``from wp6_data.shared.templates import render_page`` keeps
 working.
@@ -46,6 +47,7 @@ from wp6_data.shared.templates.config import (
     configure_dashboard,
     require_dashboard_id,
 )
+from wp6_data.shared.templates.icons import ICON_NAMES, icon
 from wp6_data.shared.templates.pages import (
     render_dashboard_page,
     render_nav_bar,
@@ -54,6 +56,7 @@ from wp6_data.shared.templates.pages import (
 )
 
 __all__ = [
+    "ICON_NAMES",
     "BASE_CSS",
     "DASHBOARD_CSS",
     "DASHBOARD_JS",
@@ -68,6 +71,7 @@ __all__ = [
     "_current_user",
     "build_explore_tabs",
     "chart_url",
+    "icon",
     "configure_dashboard",
     "default_date_range",
     "pill_row",

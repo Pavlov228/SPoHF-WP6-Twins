@@ -174,4 +174,8 @@ red:
         memory: 256Mi
       limits:
         cpu: 500m
-        memory: 1Gi
+        # The TSDB leg streams (never loads a whole device), but the MySQL
+        # legs still build full frames — wire heights reach ~66k rows — and
+        # the letsgrow CSVs are hundreds of MB on disk. 1Gi was OOM-killed
+        # (exit 137) once the letsgrow devices joined the export.
+        memory: 2Gi

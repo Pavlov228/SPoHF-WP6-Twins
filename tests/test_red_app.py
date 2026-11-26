@@ -459,6 +459,9 @@ def test_shared_home_and_explore_compose_with_mocked_data_layer(client, monkeypa
         assert resp.status_code == 200
         assert config.title in resp.text
         assert 'href="/explore"' in resp.text
+        # The sensor-identification download sits beside "View Status".
+        status_card = resp.text[resp.text.index("View Status"):]
+        assert "sensor_locations.docx" in status_card.split("</article>")[0]
 
         resp = client.get("/explore")
         assert resp.status_code == 200

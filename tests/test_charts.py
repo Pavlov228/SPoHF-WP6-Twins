@@ -6,8 +6,10 @@ import pandas as pd
 
 from wp6_data.shared.charts import (
     make_daily_by_year_chart,
+    make_daily_panels_chart,
     make_dual_axis_chart,
     make_line_chart,
+    make_year_to_date_chart,
     prepare_comparison,
     year_point_labels,
     year_to_date,
@@ -297,3 +299,44 @@ class TestDailyByYearChart:
         fig = make_daily_by_year_chart(daily, "value", "Hours")
 
         assert all(t.visible in (None, True) for t in fig.data)
+
+
+class TestYearToDateChart:
+    def _panels(self):
+        lamps = pd.DataFrame({
+            "date": [date(2023, 2, 11), date(2024, 1, 1)], "hours": [10.0, 12.0],
+        })
+        heat = pd.DataFrame({
+            "date": [date(2024, 1, 1), date(2025, 1, 1)], "index": [500.0, 600.0],
+        })
+        return [(lamps, "hours", "Lamp-hours", "h"), (heat, "index", "Heat", "")]
+
+    def test_one_panel_per_source_one_legend_entry_per_year(self):
+        fig = make_year_to_date_chart(self._panels())
+
+        rows = {t.name: [] for t in fig.data}
+        for t in fig.data:
+            rows[t.name].append(t.yaxis)
+        assert rows == {"2023": ["y"], "2024": ["y", "y2"], "2025": ["y2"]}
+        assert sorted(t.name for t in fig.data if t.showlegend is not False) == [
+            "2023", "2024", "2025",
+        ]
+
+    def test_a_year_has_one_colour_in_every_panel(self):
+        fig = make_year_to_date_chart(self._panels())
+
+        colours = {(t.name, t.marker.color) for t in fig.data}
+        assert len(colours) == len({t.name for t in fig.data})
+
+    def test_a_late_starting_year_starts_hidden_everywhere(self):
+        fig = make_year_to_date_chart(self._panels(), hide_late_starts=True)
+
+        hidden = {t.name for t in fig.data if t.visible == "legendonly"}
+        assert hidden == {"2023"}
+
+    def test_the_daily_panels_mirror_the_totals(self):
+        totals = make_year_to_date_chart(self._panels(), hide_late_starts=True)
+        daily = make_daily_panels_chart(self._panels(), hide_late_starts=True)
+
+        shape = lambda fig: [(t.name, t.yaxis, t.visible, t.line.color) for t in fig.data]  # noqa: E731
+        assert shape(daily) == shape(totals)

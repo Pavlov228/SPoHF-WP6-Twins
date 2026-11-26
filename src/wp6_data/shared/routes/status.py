@@ -49,7 +49,7 @@ SYNC_CSS = """
         display: flex; flex-wrap: wrap; gap: 0.15rem 1.1rem;
         font-size: 0.85rem; color: var(--pico-muted-color);
     }
-    .sync-metrics b { color: var(--pico-color); font-weight: 600; }
+    .sync-metrics b { color: var(--dashboard-text); font-weight: 600; }
     .sync-metrics .fresh.warn b { color: #a16207; }
     .sync-metrics .fresh.bad b  { color: #b91c1c; }
     @media (prefers-color-scheme: dark) {

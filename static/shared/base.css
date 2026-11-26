@@ -23,6 +23,13 @@
         --pico-primary-focus: var(--dashboard-primary-light);
         --pico-primary-underline: var(--dashboard-primary-light);
         --pico-primary-inverse: #fff;
+        /* The page's body text colour, fixed here at the root. Pico redefines
+           --pico-color per component (a <button>'s is its white label, a
+           <th>'s is overridden below to the header colour), so reading
+           var(--pico-color) on anything with a transparent background can
+           paint text invisible.
+           Read this instead; tests/test_css_guard.py enforces it. */
+        --dashboard-text: var(--pico-color);
     }
     /* Dark mode — lighter hover for contrast on dark bg */
     [data-theme="dark"][data-dashboard] {
@@ -201,7 +208,7 @@
         margin: 0 0 -1px 0; padding: 0.5rem 0.9rem;
         width: auto; font-weight: 600;
     }
-    .explore-tabs .tab-buttons button:hover { color: var(--pico-color); }
+    .explore-tabs .tab-buttons button:hover { color: var(--dashboard-text); }
     .explore-tabs .tab-buttons button[aria-selected="true"] {
         color: var(--dashboard-primary);
         border-bottom-color: var(--dashboard-primary);

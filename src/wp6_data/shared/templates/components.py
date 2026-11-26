@@ -249,11 +249,12 @@ def render_table(
     )
 
 
-EXPLORE_TAB_IDS = ("devices", "sensors", "manual")
+EXPLORE_TAB_IDS = ("devices", "sensors", "manual", "exports")
 EXPLORE_TAB_LABELS = {
     "devices": "Devices",
     "sensors": "Sensors",
     "manual": "Manual measurements",
+    "exports": "Exports",
 }
 
 
@@ -298,13 +299,18 @@ def build_explore_tabs(
     manual_metadata: dict[str, Any] | None = None,
     manual_sources: Collection[str] = (),
 ) -> dict[str, str]:
-    """Build the three explore tables (devices, sensors, manual measurements).
+    """Build the four explore tables (devices, sensors, manual, exports).
 
     Sensors are split by ``sensor_default(key).source``: empty source = auto-
     logged, a source in ``manual_sources`` = manual upload, any other
     source = an automated sync (``TwinConfig.manual_sources``). Devices are
     filtered the same way by ``device(id).source``, so that manual-measurement
     plants do not appear in the Devices tab.
+
+    The Exports tab lists every device the nightly job wrote a CSV for —
+    including ones the Devices tab filters out (manual-upload plants, and on
+    red the LetsGrow modules), so a download is never unreachable just
+    because its device is not listed above.
 
     Args:
         metadata: The twin's metadata registry.
@@ -316,7 +322,7 @@ def build_explore_tabs(
             from the provider's ``fetch_manual_metadata``.
 
     Returns:
-        ``{"devices": html, "sensors": html, "manual": html}``
+        ``{"devices": html, "sensors": html, "manual": html, "exports": html}``
     """
     manual_metadata = manual_metadata or {"uploads": {}, "measurements": {}}
     manual_uploads = manual_metadata.get("uploads", {})
@@ -433,10 +439,36 @@ def build_explore_tabs(
         device_entries, extra_columns=["Last seen", "Download"],
     )
 
+    # --- Exports tab: every exported device, whatever tab it shows in above ---
+    export_entries = [
+        {
+            "Device": device_id,
+            "Exported at": _format_timestamp_cell(exported_at),
+        }
+        for device_id, exported_at in sorted(available_exports.items())
+    ]
+    if export_entries:
+        exports_tab = render_table(
+            ["Device", "Download", "Exported at"],
+            [
+                [
+                    e["Device"],
+                    render_download_link(e["Device"], available_exports),
+                    e["Exported at"],
+                ]
+                for e in export_entries
+            ],
+        )
+    else:
+        exports_tab = (
+            "<p>No exports yet — the nightly export job has not written any CSVs.</p>"
+        )
+
     return {
         "devices": devices_tab,
         "sensors": sensors_tab,
         "manual": manual_tab,
+        "exports": exports_tab,
     }
 
 

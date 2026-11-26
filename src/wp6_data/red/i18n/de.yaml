@@ -22,7 +22,7 @@ red_home:
     title: Mehrere Höhen
     button: Ansichten nach Höhe
     description: Überblick über Sensordaten in mehreren Höhen.
-  sensor_docx: Sensor-Geräteübersicht herunterladen (docx)
+  sensor_docx: Geräteübersicht (docx)
 
 greenhouse:
   page:

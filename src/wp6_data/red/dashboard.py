@@ -27,7 +27,7 @@ from wp6_data.red.routes import charts as red_charts
 from wp6_data.red.routes.dli_model.train import train_model_from_db
 from wp6_data.red.routes.sijia.card import render_sijia_card
 from wp6_data.red.tsdb import ensure_schema_red
-from wp6_data.shared import render_card
+from wp6_data.shared import icon, render_card
 from wp6_data.shared.app_factory import create_app
 from wp6_data.shared.i18n import th
 from wp6_data.shared.object_store_health import (
@@ -229,9 +229,11 @@ def _multi_height_card() -> str:
 
 
 def _sensor_docx() -> str:
+    """The device-identification download beside "View Status", in the visitor's language."""
     return (
         '<a href="/static/red/sensor_locations.docx" download role="button"'
-        f' class="outline" style="width:100%">{th("red_home.sensor_docx")}</a>'
+        ' class="outline" style="display:inline-flex;align-items:center;gap:0.4rem">'
+        f'{icon("download", size=18)}{th("red_home.sensor_docx")}</a>'
     )
 
 
@@ -268,7 +270,7 @@ config = TwinConfig(
     ],
     status_extras=[render_sijia_card, object_store_status_card],
 
-    home_extra_html=_sensor_docx,
+    status_card_extra_html=_sensor_docx,
     i18n_dir=Path(__file__).parent / "i18n",
     lifespan_startup=_startup,
     lifespan_shutdown=_shutdown,

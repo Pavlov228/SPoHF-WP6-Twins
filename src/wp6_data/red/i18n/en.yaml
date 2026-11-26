@@ -26,7 +26,7 @@ red_home:
     title: Multi Height
     button: Multi Height Views
     description: Visual overview of sensor data at multiple heights.
-  sensor_docx: Download Sensor Device Identification (docx)
+  sensor_docx: Device Identification (docx)
 
 greenhouse:
   page:

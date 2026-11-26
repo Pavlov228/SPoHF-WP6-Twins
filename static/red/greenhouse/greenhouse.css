@@ -103,8 +103,8 @@ main:has(#gh-app) { max-width: 1480px; }
 .gh-chart { width: 100%; height: auto; margin: 0.3rem 0; overflow: visible; }
 .gh-grid { stroke: var(--pico-muted-border-color); stroke-width: 1; }
 .gh-axis, .gh-legend, .gh-unit { fill: var(--pico-muted-color); font-size: 9px; }
-.gh-legend { fill: var(--pico-color); }
-.gh-marker { stroke: var(--pico-color); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.gh-legend { fill: var(--dashboard-text); }
+.gh-marker { stroke: var(--dashboard-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
 .gh-band { fill: #f47230; opacity: 0.12; }
 
 /* what-if */
@@ -166,7 +166,7 @@ main:has(#gh-app) { max-width: 1480px; }
 /* where a number is valid */
 .gh-scope { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.66rem;
             font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; vertical-align: 1px;
-            background: var(--pico-muted-border-color); color: var(--pico-color); }
+            background: var(--pico-muted-border-color); color: var(--dashboard-text); }
 .scope-spot { background: #f2a600; color: #191919; }
 .scope-block { background: #257de0; color: #fff; }
 .scope-outside { background: #00b894; color: #fff; }
@@ -174,7 +174,7 @@ main:has(#gh-app) { max-width: 1480px; }
 
 /* the balloon */
 .gh-balloon { position: absolute; z-index: 40; padding: 0.75rem 0.9rem 0.5rem; border-radius: 12px;
-              background: var(--pico-card-background-color); color: var(--pico-color);
+              background: var(--pico-card-background-color); color: var(--dashboard-text);
               border: 1px solid var(--pico-muted-border-color); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
               font-size: 0.8rem; line-height: 1.45; }
 .gh-balloon::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 7px); width: 12px;
@@ -225,7 +225,7 @@ main:has(#gh-app) { max-width: 1480px; }
 .gh-term:hover, .gh-term:focus-visible { color: var(--pico-primary); outline: none; }
 .gh-term[data-kind="cfg"] { text-decoration-style: dashed; }
 .gh-tip { position: absolute; z-index: 60; padding: 0.55rem 0.7rem 0.45rem; border-radius: 10px;
-          background: var(--pico-card-background-color); color: var(--pico-color);
+          background: var(--pico-card-background-color); color: var(--dashboard-text);
           border: 1px solid var(--pico-muted-border-color); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
           font-size: 0.76rem; line-height: 1.4; }
 .gh-tip strong { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; }
@@ -240,7 +240,7 @@ main:has(#gh-app) { max-width: 1480px; }
 .gh-cfg td:nth-child(2) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .gh-cfg td:last-child { text-align: right; }
 .gh-src { display: inline-block; padding: 0 0.4rem; border-radius: 999px; font-size: 0.62rem; font-weight: 600;
-          white-space: nowrap; background: var(--pico-muted-border-color); color: var(--pico-color); }
+          white-space: nowrap; background: var(--pico-muted-border-color); color: var(--dashboard-text); }
 .src-calibrated { background: #00b894; color: #fff; }
 .src-literature { background: #9887ef; color: #fff; }
 .src-assumed { background: #f2a600; color: #191919; }
