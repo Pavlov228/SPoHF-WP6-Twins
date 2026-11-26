@@ -1,0 +1,247 @@
+/* /greenhouse — the 3D viewer is always dark (it is a scene, not a page);
+   the panels around it follow the page's light/dark theme. */
+
+main:has(#gh-app) { max-width: 1480px; }
+
+.gh { --gh-ink: #eef2f7; --gh-ink-2: #aab4c2; --gh-glass: rgba(10, 16, 26, 0.62);
+      --gh-line: rgba(255, 255, 255, 0.12); --gh-accent: #3fa7ff; }
+.gh h1 { margin-bottom: 0.2rem; }
+.gh-sub, .gh-muted { color: var(--pico-muted-color); font-size: 0.86rem; }
+.gh-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.gh-daypick { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 1rem; }
+.gh-daypick input { margin: 0; width: auto; }
+.gh-daypick button { margin: 0; padding: 0.35rem 0.7rem; width: auto; flex: 0 0 auto; }
+.gh-daypick input { flex: 0 0 auto; width: 11.5rem; }
+
+/* stage: viewer + panel */
+.gh-stage { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 1rem; align-items: stretch; }
+@media (max-width: 1100px) { .gh-stage { grid-template-columns: 1fr; } }
+.gh-viewer { position: relative; height: min(74vh, 760px); min-height: 460px; border-radius: 14px;
+             overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #1b2738, #070b12);
+             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+.gh-viewer canvas { display: block; cursor: grab; }
+.gh-labels { position: absolute; inset: 0; pointer-events: none; }
+.gh-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--gh-ink);
+              font-size: 0.95rem; background: rgba(7, 11, 18, 0.6); z-index: 5; }
+
+/* pins on the parts */
+.gh-pin { pointer-events: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+          padding: 0.2rem 0.5rem; margin: 0; border: 1px solid var(--gh-line); border-radius: 8px;
+          background: var(--gh-glass); backdrop-filter: blur(6px); color: var(--gh-ink);
+          font-size: 0.72rem; line-height: 1.25; cursor: pointer; transform: translateY(-50%);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); width: auto; }
+.gh-pin:hover, .gh-pin.is-active { border-color: var(--gh-accent); background: rgba(20, 40, 66, 0.85); }
+.gh-pin-name { font-weight: 600; letter-spacing: 0.01em; }
+.gh-pin-val { color: var(--gh-ink-2); font-variant-numeric: tabular-nums; }
+
+/* heads-up readouts */
+.gh-hud { position: absolute; top: 0.8rem; z-index: 3; display: flex; gap: 0.35rem; flex-wrap: wrap;
+          max-width: 46%; pointer-events: none; }
+.gh-hud-left { left: 0.8rem; }
+.gh-hud-right { right: 0.8rem; justify-content: flex-end; }
+.gh-hud-title { flex-basis: 100%; color: var(--gh-ink-2); font-size: 0.7rem; text-transform: uppercase;
+                letter-spacing: 0.08em; }
+.gh-hud-right .gh-hud-title { text-align: right; }
+.gh-hud-chip { display: flex; flex-direction: column; align-items: flex-start; padding: 0.3rem 0.55rem;
+               border-radius: 8px; margin: 0; width: auto; flex: 0 0 auto; pointer-events: auto; cursor: pointer;
+               background: var(--gh-glass); backdrop-filter: blur(6px); border: 1px solid var(--gh-line);
+               box-shadow: none; text-align: left; }
+.gh-hud-chip:hover, .gh-hud-chip.is-active { border-color: var(--gh-accent); background: rgba(20, 40, 66, 0.85); }
+.gh-hud-chip span { color: var(--gh-ink-2); font-size: 0.66rem; }
+.gh-hud-chip strong { color: var(--gh-ink); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+/* layer toggles */
+.gh-layers { position: absolute; left: 0.8rem; bottom: 5.6rem; z-index: 3; display: flex; gap: 0.3rem;
+             flex-wrap: wrap; }
+.gh-chip { flex: 0 0 auto; margin: 0; padding: 0.22rem 0.6rem; font-size: 0.72rem; border-radius: 999px; width: auto;
+           color: var(--gh-ink-2); background: var(--gh-glass); border: 1px solid var(--gh-line); }
+.gh-chip.is-on { color: var(--gh-ink); border-color: rgba(63, 167, 255, 0.7); }
+
+/* timeline */
+.gh-timeline { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex;
+               align-items: center; gap: 0.8rem; padding: 0.7rem 0.9rem 0.6rem;
+               background: linear-gradient(transparent, rgba(4, 7, 12, 0.85) 40%); }
+.gh-play { margin: 0; width: 2.4rem; height: 2.4rem; padding: 0; border-radius: 50%;
+           background: var(--gh-accent); border: none; color: #fff; font-size: 0.85rem; }
+.gh-track { position: relative; flex: 1; }
+.gh-strip { display: block; width: 100%; height: 26px; border-radius: 4px; background: rgba(255, 255, 255, 0.05); }
+.gh-track input[type="range"] { position: absolute; left: 0; right: 0; top: 0; height: 26px; margin: 0;
+                                background: transparent; }
+.gh-track input[type="range"]::-webkit-slider-runnable-track { background: transparent; }
+.gh-track input[type="range"]::-moz-range-track { background: transparent; }
+.gh-strip-key { display: flex; gap: 0.9rem; margin-top: 0.25rem; color: var(--gh-ink-2); font-size: 0.68rem; }
+.gh-strip-key i, .gh-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.3rem;
+                           vertical-align: -1px; }
+.gh-clock { color: var(--gh-ink); font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums;
+            min-width: 3.6rem; text-align: right; }
+
+/* side panel */
+.gh-panel { border: 1px solid var(--pico-muted-border-color); border-radius: 14px; padding: 1rem 1.1rem;
+            background: var(--pico-card-background-color); overflow-y: auto; max-height: min(74vh, 760px); }
+.gh-panel h3 { margin: 0 0 0.6rem; font-size: 1.1rem; }
+.gh-panel h4 { margin: 1rem 0 0.4rem; font-size: 0.9rem; }
+.gh-panel-head { display: flex; justify-content: space-between; align-items: center; }
+.gh-close { margin: 0; padding: 0 0.55rem; width: auto; line-height: 1.6; font-size: 1.1rem;
+            background: transparent; border: 1px solid var(--pico-muted-border-color); color: inherit; }
+.gh-kv { width: 100%; font-size: 0.82rem; margin: 0.4rem 0 0.6rem; }
+.gh-kv td { padding: 0.22rem 0.3rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+.gh-kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+.gh-bars { display: grid; gap: 0.25rem; font-size: 0.8rem; }
+.gh-bar-head { margin-top: 0.4rem; color: var(--pico-muted-color); font-size: 0.72rem; text-transform: uppercase;
+               letter-spacing: 0.06em; }
+.gh-bar { display: grid; grid-template-columns: 11.5rem 1fr 3.2rem; align-items: center; gap: 0.4rem;
+          margin: 0; padding: 0.12rem 0.25rem; width: 100%; border: none; border-radius: 6px; background: none;
+          color: inherit; font-size: inherit; text-align: left; box-shadow: none; cursor: pointer; }
+.gh-bar:hover { background: var(--pico-muted-border-color); }
+.gh-bar-label i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.35rem; }
+.gh-bar-track { height: 9px; background: var(--pico-muted-border-color); border-radius: 4px; overflow: hidden; }
+.gh-bar-fill { display: block; height: 100%; border-radius: 4px; }
+.gh-bar-val { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* charts */
+.gh-chart { width: 100%; height: auto; margin: 0.3rem 0; overflow: visible; }
+.gh-grid { stroke: var(--pico-muted-border-color); stroke-width: 1; }
+.gh-axis, .gh-legend, .gh-unit { fill: var(--pico-muted-color); font-size: 9px; }
+.gh-legend { fill: var(--pico-color); }
+.gh-marker { stroke: var(--pico-color); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.gh-band { fill: #f47230; opacity: 0.12; }
+
+/* what-if */
+.gh-whatif { font-size: 0.85rem; display: grid; gap: 0.3rem; }
+.gh-whatif input { margin: 0; }
+.gh-wi-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.gh-wi-btn { margin: 0; padding: 0.3rem 0.7rem; font-size: 0.8rem; width: auto; }
+.gh-wi-result { margin-top: 0.6rem; padding: 0.6rem 0.7rem; border-radius: 10px;
+                border: 1px dashed var(--pico-muted-border-color); }
+.gh-wi-title { font-weight: 600; font-size: 0.85rem; }
+
+/* below the stage */
+.gh-below { margin-top: 1.2rem; }
+.gh-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; }
+.gh-tile { margin: 0; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; align-items: flex-start;
+           gap: 0.1rem; width: auto; text-align: left; cursor: pointer; color: inherit; font-weight: inherit;
+           background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color);
+           border-radius: var(--pico-border-radius); box-shadow: var(--pico-card-box-shadow); }
+.gh-tile:hover { border-color: var(--pico-primary); }
+.gh-tile span { color: var(--pico-muted-color); font-size: 0.75rem; }
+.gh-tile strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; color: var(--pico-h2-color, inherit); }
+.gh-tile small { color: var(--pico-muted-color); font-size: 0.72rem; }
+.gh-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.4rem; margin-top: 1.4rem; }
+@media (max-width: 900px) { .gh-columns { grid-template-columns: 1fr; } }
+.gh-columns h2 { font-size: 1.15rem; margin-bottom: 0.2rem; }
+
+.gh-advice { display: grid; gap: 0.6rem; }
+.gh-advice-card { margin: 0; padding: 0.7rem 0.85rem; border-left: 4px solid var(--pico-muted-border-color);
+                  font-size: 0.85rem; }
+.gh-advice-card header { display: flex; gap: 0.5rem; align-items: center; margin: 0 0 0.25rem; padding: 0;
+                         background: none; border: none; }
+.gh-advice-card p { margin: 0.25rem 0; }
+.gh-level { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--pico-muted-border-color); }
+.lvl-act { border-left-color: #ec4647; }
+.lvl-act .gh-level { background: #ec4647; color: #fff; }
+.lvl-consider { border-left-color: #f2a600; }
+.lvl-consider .gh-level { background: #f2a600; color: #191919; }
+.lvl-info .gh-level { background: #257de0; color: #fff; }
+.lvl-ok { border-left-color: #00b894; opacity: 0.85; }
+.lvl-ok .gh-level { background: #00b894; color: #fff; }
+.gh-comp, .gh-win { margin: 0; padding: 0.05rem 0.5rem; width: auto; font-size: 0.72rem; border-radius: 999px;
+                    background: transparent; color: var(--pico-primary); border: 1px solid var(--pico-primary); }
+.gh-impact { font-weight: 600; font-variant-numeric: tabular-nums; }
+.gh-wins { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.gh-tomorrow p { font-size: 0.86rem; }
+.gh-method { margin-top: 1.6rem; font-size: 0.86rem; }
+
+/* the "i" on anything that explains itself */
+.gh-i { display: inline-grid; place-items: center; width: 13px; height: 13px; margin-left: 0.3rem; border-radius: 50%;
+        font-size: 9px; font-style: italic; font-weight: 700; font-family: Georgia, serif; vertical-align: 1px;
+        color: var(--pico-muted-color); border: 1px solid currentColor; opacity: 0.7; }
+.gh-row { cursor: pointer; }
+.gh-row:hover td, .gh-row:focus td { background: var(--pico-muted-border-color); }
+.gh-row:hover .gh-i, .gh-bar:hover .gh-i, .gh-tile:hover .gh-i { color: var(--pico-primary); opacity: 1; }
+.gh-link { margin: 0; padding: 0; width: auto; border: none; background: none; color: var(--pico-primary);
+           font-size: inherit; text-decoration: underline; box-shadow: none; }
+
+/* where a number is valid */
+.gh-scope { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: 0.66rem;
+            font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; vertical-align: 1px;
+            background: var(--pico-muted-border-color); color: var(--pico-color); }
+.scope-spot { background: #f2a600; color: #191919; }
+.scope-block { background: #257de0; color: #fff; }
+.scope-outside { background: #00b894; color: #fff; }
+.scope-model { background: #9887ef; color: #fff; }
+
+/* the balloon */
+.gh-balloon { position: absolute; z-index: 40; padding: 0.75rem 0.9rem 0.5rem; border-radius: 12px;
+              background: var(--pico-card-background-color); color: var(--pico-color);
+              border: 1px solid var(--pico-muted-border-color); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+              font-size: 0.8rem; line-height: 1.45; }
+.gh-balloon::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 7px); width: 12px;
+                      height: 12px; transform: rotate(45deg); background: inherit;
+                      border-left: 1px solid var(--pico-muted-border-color); border-top: 1px solid var(--pico-muted-border-color); }
+.gh-balloon.is-above::before { top: auto; bottom: -7px; border: none;
+                               border-right: 1px solid var(--pico-muted-border-color);
+                               border-bottom: 1px solid var(--pico-muted-border-color); }
+.gh-balloon-head { display: flex; gap: 0.5rem; align-items: center; }
+.gh-balloon-head strong { flex: 1; font-size: 0.9rem; }
+.gh-balloon-value { margin: 0.35rem 0 0.1rem; font-variant-numeric: tabular-nums; color: var(--pico-muted-color); }
+.gh-balloon h5, .gh-panel h5 { margin: 0.6rem 0 0.15rem; font-size: 0.7rem; text-transform: uppercase;
+                               letter-spacing: 0.06em; color: var(--pico-muted-color); }
+.gh-balloon p { margin: 0 0 0.2rem; }
+.gh-balloon code, .gh-note code { font-size: 0.74rem; padding: 0.02rem 0.25rem; }
+.gh-note { font-size: 0.8rem; margin: 0 0 0.3rem; }
+.gh-metric-now { margin: 0 0 0.3rem; font-size: 0.85rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.gh-metric-now strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+
+/* the day-length dial */
+.gh-dial { position: absolute; right: 0.8rem; bottom: 5.4rem; z-index: 3; display: flex; align-items: center;
+           gap: 0.5rem; padding: 0.4rem 0.6rem 0.4rem 0.4rem; border-radius: 14px; background: var(--gh-glass);
+           backdrop-filter: blur(6px); border: 1px solid var(--gh-line); }
+.gh-dial-btn { position: relative; margin: 0; padding: 0; width: 96px; height: 96px; border: none; background: none;
+               box-shadow: none; cursor: pointer; flex: 0 0 auto; }
+.gh-dial-btn svg { width: 96px; height: 96px; display: block; }
+.gh-dial-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+                justify-content: center; pointer-events: none; color: var(--gh-ink); line-height: 1.05; }
+.gh-dial-text strong { font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.gh-dial-text small { font-size: 0.55rem; color: var(--gh-ink-2); }
+.gh-dial-tick { fill: rgba(255, 255, 255, 0.45); font-size: 7px; }
+.gh-dial-sub { color: var(--gh-ink-2); font-size: 0.68rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.gh-dial-sub i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.2rem; }
+@media (max-width: 700px) { .gh-dial-sub { display: none; } }
+
+/* literature: numbered superscripts and the list under a balloon or advice card */
+.gh-fn { font-size: 0.65em; line-height: 0; margin-left: 0.05em; }
+.gh-fn a { text-decoration: none; padding: 0 0.1em; }
+.gh-refs { margin: 0.2rem 0 0.3rem; padding-left: 1.3rem; font-size: 0.72rem; line-height: 1.4;
+           color: var(--pico-muted-color); list-style: decimal outside; }
+.gh-refs li { margin: 0.1rem 0; list-style: inherit; padding-left: 0.1rem; }
+.gh-advice-card .gh-refs { margin-top: 0.35rem; }
+
+/* words with a popup behind them: "configured", a LetsGrow series or module, a term */
+.gh-term { display: inline; margin: 0; padding: 0; width: auto; border: none; background: none; box-shadow: none;
+           font: inherit; line-height: inherit; color: inherit; cursor: help; vertical-align: baseline;
+           text-decoration: underline dotted; text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+.gh-term:hover, .gh-term:focus-visible { color: var(--pico-primary); outline: none; }
+.gh-term[data-kind="cfg"] { text-decoration-style: dashed; }
+.gh-tip { position: absolute; z-index: 60; padding: 0.55rem 0.7rem 0.45rem; border-radius: 10px;
+          background: var(--pico-card-background-color); color: var(--pico-color);
+          border: 1px solid var(--pico-muted-border-color); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+          font-size: 0.76rem; line-height: 1.4; }
+.gh-tip strong { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; }
+.gh-tip p { margin: 0 0 0.25rem; }
+.gh-tip code { font-size: 0.72rem; padding: 0.02rem 0.3rem; }
+.gh-tip h6 { margin: 0.45rem 0 0.1rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em;
+             color: var(--pico-muted-color); }
+.gh-tip.is-wide { max-height: 60vh; overflow-y: auto; }
+.gh-tip-note { color: var(--pico-muted-color); font-size: 0.7rem; margin-top: 0.3rem; }
+.gh-cfg { width: 100%; margin: 0.1rem 0 0.2rem; font-size: 0.74rem; border-collapse: collapse; }
+.gh-cfg td { padding: 0.12rem 0.25rem; border-bottom: 1px solid var(--pico-muted-border-color); vertical-align: top; }
+.gh-cfg td:nth-child(2) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gh-cfg td:last-child { text-align: right; }
+.gh-src { display: inline-block; padding: 0 0.4rem; border-radius: 999px; font-size: 0.62rem; font-weight: 600;
+          white-space: nowrap; background: var(--pico-muted-border-color); color: var(--pico-color); }
+.src-calibrated { background: #00b894; color: #fff; }
+.src-literature { background: #9887ef; color: #fff; }
+.src-assumed { background: #f2a600; color: #191919; }
+.src-grower { background: #257de0; color: #fff; }

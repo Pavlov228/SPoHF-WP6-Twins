@@ -1,0 +1,936 @@
+# Red's strings in English — the reference the German and Dutch catalogues follow.
+# Plain text unless a key ends in _html; {placeholders} are filled by the code, and
+# numbers in them are written the language's way. [^id] cites the literature
+# (greenhouse/references.yaml). [word](cfg:group) opens the configured values behind a
+# number, [name](tag:lg_…) / [name](mod:role) a LetsGrow series or module, and
+# [word](term:id) a short explanation — so visitors never read file names or ids.
+
+red_home:
+  greenhouse:
+    title: Greenhouse
+    button: Greenhouse in 3D
+    description: Heat and vapour flows, crop activity, and what the twin advises.
+  dli:
+    title: Light Analysis (DLI)
+    button: DLI Dashboard
+    description: Daily Light Integral analysis and optimization tools.
+  energy:
+    title: Energy
+    button: Lamps & Heating
+    description: Lamp-hours and heat output per day, year against year.
+  crop_cycles:
+    title: Crop Cycles
+    button: Cohort Waterfall
+    description: Overlapping 8-week fruit cohorts against the climate they grew in.
+  multi_height:
+    title: Multi Height
+    button: Multi Height Views
+    description: Visual overview of sensor data at multiple heights.
+  sensor_docx: Download Sensor Device Identification (docx)
+
+greenhouse:
+  page:
+    title: Greenhouse
+    sub: >-
+      What LetsGrow measured, what the physics makes of it, and what the twin would
+      do differently. Click a part of the greenhouse for its details, and any number
+      for how it is made.
+    day: Day
+    previous_day: Previous day
+    next_day: Next day
+    latest: Latest
+    loading: Loading the greenhouse…
+    layers: Layers
+    advice: What the twin advises
+    tomorrow: Tomorrow's light
+    method: How the physics works
+    method_balance_html: >-
+      Every 15 minutes, the heat coming in — sun through the glass ({transmission:.0%}
+      transmission), the lamps' electrical power, and the heating pipes (estimated from
+      their measured temperature) — is set against the heat going out: through the cover
+      (U-value [calibrated](term:calibrated) on red's own closed, dark nights; an assumed
+      ~{screen_saving:.0%} less with the energy screen closed — both
+      [configured](cfg:cover)), with the ventilation air (air exchange against vent
+      opening, [calibrated](term:calibrated) from the crop's measured transpiration),
+      and as evaporated water (transpiration from the substrate scale). What none of
+      these explain is the <em>residual</em>: heat stored in or released by the air, crop
+      and structure, and model error. It is shown, not hidden — large on sunny summer
+      days, when full vents move more air than the night-calibrated curve knows.
+    method_whatif_html: >-
+      What-ifs keep the measured air temperature and ask how much pipe heat other
+      settings would have needed, and what humidity they would have left; they are
+      reported as changes against what actually ran, so the model's own offset cancels.
+      Every number the physics uses is [configured](cfg:all), each with where it comes
+      from; the reasoning behind the rules is in the twin's [research note](term:research).
+    method_no_euros_html: >-
+      No euros: what heat or light costs depends on the energy contract and the crop's
+      value, neither of which the twin knows. Everything is in MJ/m², lamp-hours and
+      J/cm².
+
+  note:
+    short_day: LetsGrow has fewer than 12 hours of climate data for this day.
+    no_curtain: "Energy curtain not logged by LetsGrow before 21 May 2026: drawn open."
+    no_data: No LetsGrow data for this day.
+    no_forecast: The radiation forecast could not be fetched.
+    forecast_short: The forecast does not cover tomorrow yet.
+
+  pipe:
+    lg_pipe_lower: Pipe rail (lower circuit)
+    lg_pipe_growth: Growth pipe
+
+  # LetsGrow modules and series by their plain names; the ids show in their popups.
+  module:
+    climate:
+      name: Climate B4
+      about: "The climate computer's module for section B4: the measuring box, the heating pipes, the vents and the screens."
+    lamps:
+      name: Grow light B4
+      about: "The lighting module for section B4: when the LED lamps are on, and at what level."
+    water:
+      name: Water B4
+      about: "The irrigation module for section B4: irrigation, drain, EC and the substrate scale."
+    weather:
+      name: Weather station
+      about: "The greenhouse's own weather station on the roof: outside temperature, humidity, sun and wind."
+  tag:
+    lg_temp_outside: outside temperature
+    lg_rh_outside: outside humidity
+    lg_abs_hum_outside: outside absolute humidity
+    lg_rad: global radiation
+    lg_wind_speed: wind speed
+    lg_wind_dir: wind direction
+    lg_temp_greenhouse: greenhouse temperature
+    lg_rh_greenhouse: greenhouse humidity
+    lg_abs_hum_greenhouse: greenhouse absolute humidity
+    lg_co2: CO₂
+    lg_heating_setpoint: heating setpoint
+    lg_assim_light_on: lamps on/off
+    lg_assim_light_pct: lamp level
+    lg_pipe_lower: pipe rail temperature
+    lg_pipe_growth: growth pipe temperature
+    lg_pipe_lower_calc: pipe rail request
+    lg_pipe_growth_calc: growth pipe request
+    lg_vent_lee: lee-side vents
+    lg_vent_wind: windward vents
+    lg_energy_curtain: energy screen
+    lg_substrate_weight: substrate weight
+    lg_irrigation: irrigation counter
+    lg_irrigation_starts: irrigation starts
+    lg_drain: drain counter
+    lg_drain_ec: drain EC
+
+  # What a "configured" popup lists: a label and a unit per value.
+  cfg:
+    source:
+      calibrated: Calibrated on red's data
+      literature: From the literature
+      assumed: Assumed
+      grower: The grower's figure
+      twin: The twin's setting
+    cover:
+      title: Glass cover
+      transmission: {label: Sun through glass and structure, unit: ""}
+      u_open: {label: Heat loss through the cover (U), unit: W/m²·K}
+      u_wind: {label: Extra loss per m/s of wind, unit: W/m²·K}
+      screen_saving: {label: Loss saved by a closed screen, unit: ""}
+      screen_transmission: {label: Sun through a closed screen, unit: ""}
+      reflected_share: {label: Sun reflected back out by crop and floor, unit: ""}
+      cover_temperature_share: {label: Glass temperature (share from outside to inside), unit: ""}
+      condensation_rate: {label: Condensation rate on the glass, unit: m/s}
+    ventilation:
+      title: Ventilation curve
+      point: at {opening} vent opening
+      unit: m³ air per m² per hour
+    lamps:
+      title: Lamps
+      par: {label: Light at full output, unit: µmol/m²/s}
+      radiation_eq: {label: Outdoor-equivalent per lamp-hour, unit: J/cm²}
+      efficacy: {label: LED efficacy, unit: µmol/J}
+      power: {label: Electrical power (light ÷ efficacy), unit: W/m²}
+    pipes:
+      title: Heating pipes
+      value: ⌀ {diameter_mm} mm, {length:g} m per m² floor
+    crop_water:
+      title: Crop water
+      scale_area_m2: {label: Crop on the scale, unit: m²}
+      intercept: {label: "Transpiration shape: base", unit: ml/m²/h}
+      per_sun_w: {label: …per W/m² of sun inside, unit: ml/m²/h}
+      per_lamp_w: {label: …per W/m² of lamp power, unit: ml/m²/h}
+      per_hd: {label: …per g/m³ of humidity deficit, unit: ml/m²/h}
+      per_pipe_w: {label: …per W/m² of pipe heat, unit: ml/m²/h}
+    rules:
+      title: Rules and thresholds
+      light_target_jcm2: {label: Light target per day, unit: J/cm²}
+      dark_min_h: {label: Unbroken dark at least, unit: h}
+      wake_lamp_h: {label: Light lost per switch-on while the crop wakes, unit: lamp-hour}
+      sun_max_w: {label: No lamps above this sun, unit: W/m²}
+      humid_rh: {label: Humid from, unit: "% RH"}
+      humid_hours_target: {label: Humid hours a day at most, unit: h}
+      vent_open_pct: {label: Vents count as open above, unit: "%"}
+      dry_rh: {label: Dry air below, unit: "% RH"}
+      co2_lamp_floor_ppm: {label: CO₂ flag while the lamps run, unit: ppm}
+
+  explain:
+    lg: "LetsGrow, module {module}: {tags} — logged every 5 minutes, averaged to 15 minutes here."
+    pipe_geometry: "{label}: ⌀ {diameter_mm} mm, {length:g} m per m² floor"
+    t_out:
+      title: Outside temperature
+      how: Measured, not calculated.
+      source: "{lg}"
+      read: >-
+        Sets the cover's heat loss: every °C between inside and outside costs
+        ~{u_open:g} W/m² of floor ([calibrated](term:calibrated) on red; see Glass cover).
+    rh_out:
+      title: Outside humidity
+      how: >-
+        Measured relative humidity; the balance uses the
+        [absolute humidity](tag:lg_abs_hum_outside) (g/m³) logged next to it.
+      source: "{lg}"
+      read: >-
+        Venting swaps greenhouse air for this air. Cold outside air holds little water
+        even at a high RH, so it still dries the house.[^dezwart2021]
+    radiation:
+      title: Global radiation (outside)
+      how: >-
+        Measured on the roof: all short-wave sunlight on a horizontal surface, W/m². It
+        reads exactly 0 until the sun is ~5° up, so any value above 0 counts as natural
+        light.
+      source: "{lg}"
+      read: >-
+        About {transmission:.0%} gets through the glass. Above {sun_max_w:g} W/m² the
+        lamps add little — tomato leaf photosynthesis levels off above about 500
+        µmol/m²/s of sun plus lamp[^vanhoogdalem2022] — and the light plan does not count
+        on them.
+    wind:
+      title: Wind
+      how: Measured speed (m/s) and the direction it blows from (°, 0 = north).
+      source: "{lg}"
+      read: >-
+        Wind strips heat off the outside of the glass:[^vanthoor2011a] each m/s adds
+        {u_wind:g} W/m² per °C to the cover's loss. The direction decides which vents are
+        lee and which windward; the 3D view opens them so.
+    t_in:
+      title: Greenhouse temperature
+      how: Measured in the climate computer's measuring box.
+      source: "{lg}"
+      read: >-
+        One measuring point for the whole block: near the walls, under open vents or
+        above the pipe rail the air can differ — dense sensor grids in commercial
+        greenhouses find warm, cold and humid spots.[^rezvani2020][^wur_wireless]
+    rh_in:
+      title: Greenhouse humidity
+      how: >-
+        Measured in the measuring box. The balance uses the
+        [absolute humidity](tag:lg_abs_hum_greenhouse) logged next to it.
+      source: "{lg}"
+      read: >-
+        At or above {humid_rh:g}% counts as humid: grey mould (Botrytis) risk grows with
+        the hours spent above 90% RH,[^baptista2012] and continuously humid air hampers
+        calcium supply and lowers yield.[^bakker1991] The target of at most
+        {humid_hours_target:g} humid hours a day is the twin's setting, not a literature
+        value. One measuring point for the whole block: the air can differ from place to
+        place.
+    co2:
+      title: CO₂
+      how: Measured in the measuring box, ppm.
+      source: "{lg}"
+      read: >-
+        More CO₂ makes the light more productive: light-use efficiency rises by about
+        10–15% per 100 ppm extra CO₂,[^nederhoff1994] and the yield gain from extra light
+        is larger at high CO₂.[^marcelis2006] The {co2_floor:g} ppm mark is the twin's own
+        flag for lamp hours, not a threshold from the literature. Outside air holds about
+        425 ppm,[^noaa_aggi] so venting pulls the greenhouse down towards it.
+    heat_sp:
+      title: Heating setpoint
+      how: The air temperature the climate computer heats to.
+      source: "{lg}"
+      read: >-
+        Air well above it while the pipes are warm means the pipe heat was asked for
+        something else (a minimum pipe, for humidity).
+    delta_t:
+      title: Inside − outside
+      how: Greenhouse temperature minus outside temperature.
+      source: >-
+        [Greenhouse temperature](tag:lg_temp_greenhouse) −
+        [outside temperature](tag:lg_temp_outside), both from LetsGrow.
+      read: What drives heat out through the glass and with the vent air.
+    lamps:
+      title: Lamps
+      how: >-
+        On/off times output level. Red's LEDs switch as one installation and are never
+        dimmed, so this is 0 or 100%; a 15-minute step can be in between when they
+        switched within it.
+      source: "{lg}"
+      read: "The whole block at once: every lamp you see does the same."
+    lamp_power:
+      title: Lamp heat
+      how: >-
+        {par:g} µmol/m²/s at full output (the grower's lamp sheet) ÷ an ASSUMED efficacy
+        of {efficacy:g} µmol/J (what commercial LEDs were modelled at in
+        2020;[^katzin2021] the practical limit of current LEDs is about
+        3.4–4.1[^kusuma2020]) = {power_w} W/m², times the lamp share. All electrical power
+        ends as heat in the house.
+      source: The grower's lamp sheet and an assumed LED efficacy, both [configured](cfg:lamps).
+      read: >-
+        The lamps' heat in the balance. A more or less efficient LED shifts it in
+        proportion; it is not a metered consumption.
+    light_sum:
+      title: Light sum
+      how: >-
+        Sun: outside radiation summed over the day (W/m² × seconds ÷ 10,000 = J/cm²).
+        Lamps: {radiation_eq:g} J/cm² per full lamp-hour, the grower's outdoor-equivalent
+        from the lamp sheet ([configured](cfg:lamps)).
+      source: "{lg}"
+      read: >-
+        The grower's target is {target:g} J/cm² a day, a Dutch growing rule of thumb
+        ("tomatoes need at least 1000 joules a day"),[^flinterman2015] counted in this same
+        outdoor-equivalent unit. Yield keeps rising with light above it: +1% light gives
+        +0.7–1% fruit.[^marcelis2006]
+    day_length:
+      title: Day length
+      how: >-
+        Natural light (outside radiation above 0) plus the hours the lamps ran while
+        there was no sun. The rest is dark. Counted inside the calendar day. Sunrise and
+        sunset are astronomical (sun position at the site); the station only registers
+        light once the sun is ~5° up, so measured natural light is shorter than
+        sunrise-to-sunset.
+      source: "{lg}"
+      read: >-
+        The grower's rule: as long a day as possible, with at least {dark_min} h of
+        unbroken rest. Tomato needs about six hours of darkness, and 18 h of light is the
+        practical maximum.[^velezramirez2014] At the same light sum a shorter, brighter
+        day can do better: 15 h beat 18 h by 7% in a trial.[^dueck2007] The dial in the
+        view shows sun, lamps and dark around the clock.
+    dark:
+      title: Longest unbroken dark
+      how: >-
+        The longest spell with no sun and no lamps. A night straddles midnight, so the
+        spell may start the evening before or end the morning after.
+      source: As Day length.
+      read: >-
+        At least {dark_min} h, the grower's rule for the crop's rest.[^velezramirez2014]
+        If the day has to be shorter, end it earlier in the evening rather than start
+        later in the morning.[^vantongerlo2025]
+    lamp_h_needed:
+      title: Lamp-hours the target needed
+      how: >-
+        The fewest whole lamp-hours that bring the day's sun up to {target:g} J/cm²,
+        keeping ≥ {dark_min} h of unbroken dark, no lamps above {sun_max_w:g} W/m²
+        outside, and {wake:g} lamp-hour lost per switch-on while the crop wakes up
+        (measured on the scale). Solved exactly.
+      source: This day's sun and the grower's rules, as [configured](cfg:rules).
+      read: Lamp-hours beyond this served the longest-day rule, not the light target.
+    lamp_h_longest_day:
+      title: Lamp-hours of the longest day
+      how: Every hour with the sun below {sun_max_w:g} W/m², less the {dark_min} h rest.
+      source: This day's sun and the grower's rules, as [configured](cfg:rules).
+      read: What the longest-day rule asks; compare with what the target needed.
+    pipe_temp:
+      title: Pipe temperatures
+      how: >-
+        Measured water temperature of each heating circuit; in brackets the temperature
+        the climate computer asked for.
+      source: >-
+        {lg} What was asked: [pipe rail request](tag:lg_pipe_lower_calc),
+        [growth pipe request](tag:lg_pipe_growth_calc).
+      read: >-
+        One circuit heats the whole block: all its pipes carry the same water. Colour in
+        the view: steel at air temperature, glowing orange as it gets hotter.
+    pipe_heat:
+      title: Pipe heat
+      how: >-
+        Per circuit, free convection after Bot (1983): 1.99·π·d·L·ΔT^1.32, plus radiation
+        ε·σ·π·d·L·(Tp⁴ − Ta⁴) with ε = {emissivity:g}, where ΔT is pipe minus air
+        temperature (as used in the Vanthoor and GreenLight greenhouse
+        models).[^vanthoor2011a][^katzin2020] Geometry ([configured](cfg:pipes); ASSUMED,
+        from GreenLight's reference greenhouse; red's own pipes are not confirmed):
+        {pipes}.
+      source: "{lg}"
+      read: >-
+        Heat the pipes give the house, W/m² of floor: an estimate from the pipe
+        temperatures, not a meter reading.
+    vent_pos:
+      title: Vent opening
+      how: >-
+        Measured opening of the lee-side and windward vents, % of their travel. The
+        balance uses the mean of the two.
+      source: "{lg}"
+      read: >-
+        Each side moves as one for the whole block. In the view, which slope is lee
+        follows the wind direction.
+    air_exchange:
+      title: Air exchange
+      how: >-
+        From the mean vent opening through a [configured](cfg:ventilation) curve,
+        [calibrated](term:calibrated) on red (m³ air per m² floor per hour): {curve},
+        straight lines between. The curve was fitted so the vapour the crop measurably
+        transpires leaves with the air.
+      source: >-
+        The [configured](cfg:ventilation) curve, fitted to red's own LetsGrow data from
+        2023–26.
+      read: >-
+        Fitted mostly on nights and mild hours: on sunny days with the vents wide open,
+        real exchange is likely higher (see the remainder).
+    ventilation:
+      title: Heat out with the vent air
+      how: >-
+        Air exchange × {rho_cp:g} J/m³K (heat held by a m³ of air per °C)[^fao56] ×
+        (inside − outside temperature).
+      source: >-
+        Air exchange, [greenhouse temperature](tag:lg_temp_greenhouse),
+        [outside temperature](tag:lg_temp_outside).
+      read: >-
+        Heat leaving as warm air swapped for cold. Only the sensible heat: the vapour it
+        carries out is booked under evaporated water.
+    vapour_out:
+      title: Vapour out with the vent air
+      how: Air exchange × (absolute humidity inside − outside).
+      source: >-
+        Air exchange, [absolute humidity inside](tag:lg_abs_hum_greenhouse) and
+        [outside](tag:lg_abs_hum_outside).
+      read: >-
+        Water the air carries out. When it falls behind the crop's transpiration, the
+        house gets more humid (or it condenses on the glass).
+    screen_pos:
+      title: Energy screen
+      how: Measured share closed.
+      source: "{lg} LetsGrow delivers it from 21 May 2026 only."
+      read: >-
+        Closed, it cuts the cover's loss by an ASSUMED ~{screen_saving:.0%} (not yet
+        measured on red; no verified source for the figure) and lets
+        ~{screen_transmission:.0%} of the sun through — both [configured](cfg:cover).
+    cover:
+      title: Heat out through the cover
+      how: >-
+        U × (inside − outside), with U = {u_open:g} + {u_wind:g} × wind (W/m² floor per
+        °C) × (1 − {screen_saving:g} × screen share). {u_open:g} is
+        [calibrated](term:calibrated) on red's closed, dark, lamp-free nights; the wind
+        term is LITERATURE[^vanthoor2011a] and the screen saving an ASSUMPTION — all
+        [configured](cfg:cover).
+      source: >-
+        [Greenhouse temperature](tag:lg_temp_greenhouse),
+        [outside temperature](tag:lg_temp_outside), [wind speed](tag:lg_wind_speed) and
+        [energy screen](tag:lg_energy_curtain) from LetsGrow; the cover's properties are
+        [configured](cfg:cover).
+      read: "Usually the biggest loss on a winter night: glass, gables and leaks together."
+    sun:
+      title: Sun kept inside
+      how: >-
+        Outside radiation × {transmission:g} through glass and structure
+        (× {screen_transmission:g} under a closed screen) × (1 − {reflected_share:g}) for
+        what the crop and floor reflect back out (LITERATURE).[^goudriaan1994] All three
+        shares are [configured](cfg:cover).
+      source: "{lg}"
+      read: >-
+        Solar heat that stays in the house: on a sunny day far more than the pipes give.
+    residual:
+      title: Remainder (stored / unexplained)
+      how: >-
+        Heat in (sun + lamps + pipes) minus heat out (cover + vent air + evaporated
+        water).
+      source: The balance itself.
+      read: >-
+        Heat the air, crop, soil and structure store (positive, warming up) or release
+        (negative), plus model error. A few % on winter days; large on sunny summer
+        days, when open vents move more air than the curve knows. Never spread over the
+        other flows.
+    transpiration:
+      title: Crop transpiration
+      how: >-
+        Between irrigation pulses — from {quiet_min} minutes after a pulse, once the slab
+        stops draining — the scale's weight loss over 30 minutes ÷ {scale_area:g} m² of
+        crop it carries[^degelder2016] (it gains ~{scale_area:g} kg per l/m² irrigated).
+        Elsewhere a [calibrated](term:calibrated), [configured](cfg:crop_water) shape fills
+        in (ml/m²/h = {tr_intercept:g} + {tr_sun:g}·sun +
+        {tr_lamp:g}·lamps + {tr_hd:g}·humidity deficit + {tr_pipe:g}·pipe heat), scaled
+        so the day matches the water balance.
+      source: "{lg}"
+      read: >-
+        The crop's activity: how hard it pulls water. 'measured' = the scale, 'modelled'
+        = the shape. One scale, one gutter section: the rest of the block may differ.
+    evaporation:
+      title: Heat out as evaporated water
+      how: >-
+        Transpiration × {latent_mj:g} MJ per kg of water evaporated, the latent heat of
+        evaporation near 20 °C.[^fao56]
+      source: Crop transpiration.
+      read: >-
+        The crop cools the house by evaporating; that heat leaves with the vapour through
+        the vents or condenses on the glass.
+    wake:
+      title: When the crop woke
+      how: >-
+        After the lamps switch on in the dark (or after sunrise): the time transpiration
+        has covered half the way from its level before to its plateau 2-4 h later.
+      source: Crop transpiration from the scale; the lamp and radiation logs.
+      read: >-
+        After the lamps switch on, photosynthetic capacity takes about 30 minutes to build
+        up;[^dueck2007] the scale shows the same lag in transpiration — about {wake:g}
+        lamp-hour per switch-on, which the light plan counts.
+    weight:
+      title: Scale weight
+      how: Measured weight of one gutter section with its slabs and plants.
+      source: "{lg}"
+      read: >-
+        Jumps up at each irrigation pulse, falls as the crop drinks. It carries
+        ~{scale_area:g} m² of crop ([calibrated](term:calibrated) from how much it gains
+        per irrigation) — a sample of the block.
+    irrigation:
+      title: Irrigation today
+      how: >-
+        LetsGrow's daily running counter, read just before it resets at midnight (23:00
+        until 2025).
+      source: "{lg}"
+      read: Water given per m², the same for the whole valve section.
+    drain:
+      title: Drain today
+      how: Daily running counter, read like irrigation; the share is drain ÷ irrigation.
+      source: "{lg}"
+      read: >-
+        Where the gauge sits is not logged; a drain gauge usually measures a few gutters,
+        not the block. It lags the pulses by hours, so only the day's total is used.
+    ec_drain:
+      title: Drain EC
+      how: Measured electrical conductivity of the drain water, mS/cm.
+      source: "{lg}"
+      read: >-
+        Above the irrigation EC: the slab is concentrating salts (the crop took more
+        water than nutrients).
+    crop_water:
+      title: Crop water
+      how: >-
+        Irrigation − drain − the scale's weight change over the day (÷ {scale_area:g}
+        m²); dropped when implausible (a changeover).
+      source: "{lg}"
+      read: >-
+        What the crop transpired over the day, l/m²: the total the hourly transpiration
+        is scaled to.
+    humid_h:
+      title: Humid hours
+      how: Hours with the measured RH at or above {humid_rh:g}%.
+      source: "{lg}"
+      read: >-
+        Target: at most {humid_hours_target:g} h a day. Getting far below it costs heat
+        (pipes on with the vents open); controlling humidity by crop-based limits instead
+        of a fixed RH setpoint saved energy in trials.[^korner2003]
+    heat_mj:
+      title: Pipe heat over the day
+      how: The pipe heat summed over the day, MJ per m² of floor.
+      source: As Pipe heat.
+      read: >-
+        The day's heating in energy units, comparable across days. Not a gas meter
+        reading.
+    lamp_h:
+      title: Lamp-hours
+      how: Hours at full output summed over the day.
+      source: "{lg}"
+      read: Compare with the lamp-hours the light target needed.
+    sensors:
+      title: What is measured where
+      how: >-
+        The climate computer measures the air in one measuring box, and the crop's water
+        on one scale under one gutter. The weather station is outside on the roof.
+        Lamps, pipes, vents and screen are set for the whole block.
+      source: >-
+        LetsGrow modules [Climate B4](mod:climate) (measuring box, pipes, vents, screen),
+        [Water B4](mod:water) (scale, irrigation, drain), [Grow light B4](mod:lamps) and
+        the [weather station](mod:weather). The box's exact spot in the block is not
+        logged; the view places it mid-house.
+      read: >-
+        Everything the twin says about air and crop rests on that one spot, while the
+        actuators act everywhere. Near walls and gables, under open vents, above the pipe
+        rail or in a corner the climate can differ — dense sensor grids in commercial
+        greenhouses find warm, cold and humid spots[^rezvani2020][^wur_wireless] —
+        microclimates this data cannot see.
+        The ring in the view only illustrates this; how far one box represents the block
+        is not known.
+
+  advice:
+    light_sum:
+      not_judged:
+        title: Light sum not judged
+        detail: Fewer than 23 hours of this day are logged.
+      sun_enough:
+        title: The sun alone reached the light target
+        detail: "{sun} J/cm² of sun against {target:.0f}; the lamps stayed off."
+      short:
+        title: Light sum {light} J/cm², below the {target:.0f} target
+        detail: >-
+          Sun {sun} J/cm² and {lamp_h:.1f} lamp-hours. Each full lamp-hour adds {k:.0f}
+          J/cm²; with ≥ {dark_min} h of dark kept, the target needed {needed:.0f} h.
+      extra:
+        title: "{extra:.1f} lamp-hours beyond the light target"
+        detail: &light_detail_en >-
+          The lamps ran {lamp_h:.1f} h for a light sum of {light} J/cm². In whole hours,
+          keeping ≥ {dark_min} h dark and counting {wake:g} h of crop wake-up per
+          switch-on, {target:.0f} J/cm² needed {needed:.0f} h. Hours beyond that serve
+          the longest-day rule, not the light target.
+      matched:
+        title: Lamps matched the light target ({lamp_h:.1f} h)
+        detail: *light_detail_en
+    heat_vented:
+      wasted:
+        title: "{mj:.1f} MJ/m² of pipe heat went out through open vents"
+        detail: >-
+          Pipes were warm while the vents stood above {vent_open:g}% on dry air (RH <
+          {dry_rh:g}%) and the air was already over its heating setpoint. That heat was
+          not needed for temperature or humidity: lower the minimum pipe in these hours.
+      ok:
+        title: No heat wasted through the vents
+        detail: Pipe heat and open vents on dry air did not coincide.
+    screen:
+      not_logged:
+        title: Screen position not logged
+        detail: >-
+          LetsGrow delivers the energy curtain only from 21 May 2026; before that the
+          screen is drawn open and its savings are not estimated.
+      save:
+        title: Closing the screen in the dark would have saved {saved:.1f} MJ/m²
+        detail: >-
+          The energy screen stayed open through dark, cold hours. Closed, it costs no
+          light then, and cuts the cover's heat loss by an assumed ~{saving:.0%} (not yet
+          measured on red).
+      ok:
+        title: Screen used in the dark hours
+        detail: No dark, cold hours with the screen open.
+    humidity:
+      humid:
+        title: "{hours:.1f} h above {rh:g}% RH"
+        detail: >-
+          Long humid spells raise Botrytis risk[^baptista2012] and slow calcium
+          transport.[^bakker1991] Vent a gap or screen-gap before raising pipe heat; it
+          removes vapour for less energy.[^dezwart2021]
+      dried:
+        title: Dried harder than needed
+        detail: >-
+          Under half an hour above {rh:g}% RH, bought with vented pipe heat. In the twin's
+          [analysis of four seasons](term:research), getting from ~3 to ~1 humid hour a
+          day cost ~30% more heat.
+      ok:
+        title: "{hours:.1f} h above {rh:g}% RH"
+        detail: Within the {target:g} h/day target.
+    dark:
+      short:
+        title: Only {hours:.1f} h of unbroken darkness
+        detail: >-
+          The crop needs at least {dark_min} h of unbroken dark.[^velezramirez2014] If the
+          day must be shorter, switch off earlier in the evening rather than on later in
+          the morning.[^vantongerlo2025]
+      ok:
+        title: "{hours:.1f} h of unbroken darkness"
+        detail: >-
+          Day length {light_h:.1f} h (sun {sun_h:.1f} h, lamps only {lamp_h:.1f} h); the
+          rest kept the ≥ {dark_min} h rule.
+    co2:
+      low:
+        title: CO₂ {ppm} ppm while the lamps ran
+        detail: >-
+          Each lamp-hour returns more fruit at higher CO₂.[^nederhoff1994] It falls as the
+          vents open after switch-on; dosing then, or venting less, raises what the lamps
+          are worth.
+    irrigation:
+      late:
+        title: First irrigation {lag:.1f} h after the crop woke
+        detail: >-
+          Transpiration rose at {wake}; the first start came at {start}. Starting closer
+          to the measured wake-up keeps the slab from drying out first.
+      early:
+        title: First irrigation {lag:.1f} h before the crop woke
+        detail: >-
+          The first start came at {start}, before transpiration rose ({wake}); water given
+          to a sleeping crop mostly drains.
+      ok:
+        title: Irrigation started at {start}
+        detail: Close to the crop waking up ({wake}).
+
+  # The page's own words, sent to the browser as one bundle.
+  ui:
+    close: Close
+    no_data: No data.
+    play: Play
+    time_of_day: Time of day
+    # popups behind "configured", a LetsGrow series or module, or a word
+    tip:
+      configured: Configured values
+      all: All configured values
+      configured_note: These are the numbers the twin calculates with; beside each, where it comes from.
+      series: LetsGrow data series
+      series_note: logged every 5 minutes
+      module: LetsGrow module
+    term:
+      calibrated: >-
+        Fitted to red's own LetsGrow data (2023–26) by the twin's team, rather than taken
+        from a handbook — so it describes this greenhouse, and is refitted when the
+        greenhouse or its sensors change.
+      research: >-
+        The twin's research note: four seasons of red's LetsGrow data (2023–26) analysed
+        for heat, light, humidity and crop activity, with the literature behind each rule.
+        Ask the twin's team for a copy.
+    comp:
+      lamps: Lamps
+      pipes: Heating pipes
+      vents: Roof vents
+      screen: Energy screen
+      crop: Crop
+      substrate: Substrate
+      weather: Weather station
+      cover: Glass cover
+      sensors: Sensors (measured here)
+    blurb:
+      lamps: LED top-lights over every row, switched as one installation. Click any number for how it is made.
+      pipes: >-
+        Two hot-water circuits for the whole block: the pipe rail along the floor and the
+        growth pipe in the crop. Their heat is estimated from the measured water
+        temperature.
+      vents: >-
+        Roof vents hinged at the ridge: opening lifts the lower edge. The lee and windward
+        sides are driven separately, each for the whole block.
+      screen: Energy curtain at gutter height, drawn across each span from its gutter.
+      crop: High-wire tomato. Its activity is its transpiration, weighed on the substrate scale under one gutter section.
+      substrate: Rockwool slabs in hanging gutters. One gutter section hangs on the scale.
+      weather: LetsGrow's weather station on the roof.
+      cover: "The glass roof and walls: what of the sun gets in, and what heat leaks out."
+    flow:
+      sun: Sun kept inside
+      lamps: Lamps
+      pipes: Heating pipes
+      cover: Through the cover
+      ventilation: With the vent air
+      evaporation: As evaporated water
+      residual: Stored / unexplained
+    scope:
+      spot: Measured at one spot
+      block: Whole block
+      outside: Outside
+      model: Calculated
+      rule: Grower's rule
+    balloon:
+      how: How it is calculated
+      source: Where the data comes from
+      read: How to read it
+      sources: Sources
+    legend:
+      sun: sun
+      lamps_on: lamps on
+      dark: dark
+      humid: RH ≥ {rh}%
+    layer:
+      zone: Measured area
+      vapour: Vapour
+      flows: Heat flows
+      labels: Labels
+      roof: Roof & screen
+      inside: Inside view
+      overview: Overview
+    dial:
+      day_length: day length
+      value: "{light} h of light: sun {sun} h + lamps only {lamps} h; longest dark {dark} h"
+      sun: sun {h} h
+      lamps: lamps
+      dark: dark {h} h (min {min})
+      sunrise: sun {rise}–{set}
+    hud:
+      outside: Outside · {date} {time}
+      inside: Inside · at the measuring spot
+      air: Air
+      rh: RH
+      sun: Sun
+      wind: Wind
+      co2: CO₂
+      crop: Crop
+    pin:
+      "on": on · {w} W/m²
+      "off": "off"
+      cover_out: "{w} W/m² out"
+    row:
+      lamps_now: Lamps now
+      lamp_heat_now: Lamp heat now
+      day_length: Day length
+      day_length_value: "{light} h (sun {sun} + lamps only {lamps})"
+      longest_dark: Longest dark
+      light_sum_today: Light sum today
+      lamp_h_today: Lamp-hours today
+      lamp_h_needed: …the target needed
+      lamp_h_longest: …the longest day runs
+      pipe_rail: Pipe rail
+      growth_pipe: Growth pipe
+      pipe_value: "{temp} °C (asked {asked})"
+      heat_into: Heat into the house
+      heat_sp: Heating setpoint
+      heat_sp_value: "{sp} °C (air {air})"
+      lee_wind: Lee / windward
+      air_exchange: Air exchange
+      heat_out_air: Heat out with the air
+      vapour_out: Vapour out with the air
+      rh_inside: RH inside
+      screen_closed: Screen closed
+      not_logged: not logged
+      cover_out: Heat out through the cover
+      delta_t: Inside − outside
+      transpiration: Transpiration
+      measured: measured
+      modelled: modelled
+      evap_heat: Evaporation heat
+      air: Air
+      air_value: "{t} °C, {rh}% RH"
+      co2: CO₂
+      woke: Woke up
+      woke_value: "{wake} ({cause} at {trigger}, +{lag} min)"
+      weight: Scale weight
+      irr_today: Irrigation today
+      drain_today: Drain today
+      crop_water_today: Crop water today
+      ec_drain: Drain EC
+      outside_air: Outside air
+      outside_rh: Outside RH
+      radiation: Global radiation
+      wind: Wind
+      wind_value: "{speed} m/s from {dir}°"
+      sun_kept: Sun kept inside
+      box_air: "Measuring box: air"
+      box_co2: "Measuring box: CO₂"
+      scale_weight: "Scale: weight"
+      scale_e: "Scale: transpiration"
+      roof_out: "Roof: outside air"
+      block_lamps: "Whole block: lamps"
+      block_pipes: "Whole block: pipes"
+      block_vents: "Whole block: vents"
+      block_screen: "Whole block: screen"
+    cause:
+      lamps: lamps
+      sunrise: sunrise
+    sensors:
+      legend_spot: "stands for the place in the shaded ring: the twin assumes the whole block behaves like it."
+      legend_block: settings act everywhere at once.
+      toggle: Toggle {chip} to see the rest of the block without the grey.
+      link: Where each sensor is, and what that means →
+    chart:
+      lamps_on: lamps on, %
+      light_so_far: light so far, J/cm²
+      pipe_heat: pipe heat, W/m²
+      vent: vent opening, %
+      rh: RH, %
+      screen: screen closed, %
+      cover_loss: cover loss, W/m²
+      co2: CO₂, ppm
+      wind_speed: wind speed, m/s
+      wind_from: from, ° (0 = north)
+    series:
+      lamps: lamps
+      sun_lamps: sun + lamps
+      sun: sun
+      target: target
+      pipe_rail: pipe rail
+      growth_pipe: growth pipe
+      air: air
+      pipes: pipes
+      lee: lee
+      windward: windward
+      rh_inside: RH inside
+      screen: screen
+      cover: cover
+      measured: measured
+      modelled: modelled
+      co2: CO₂
+      scale_weight: scale weight
+      radiation: radiation
+      outside: outside
+      inside: inside
+      sun_in: sun in
+      cover_loss: cover loss
+      heat_sp: heating setpoint
+      kept_inside: kept inside
+      wind: wind
+      direction: direction
+      as_ran: as ran
+      what_if: what if
+    panel:
+      balance_at: Energy balance at {time}
+      heat_in: Heat in, W/m²
+      heat_out: Heat out, W/m²
+      remainder: Remainder
+      remainder_note: >-
+        The remainder is heat the air, crop and structure store or release, plus model
+        error. Click any flow for how it is calculated.
+      over_day: Over the day, MJ/m²
+      click_hint: Click a part of the greenhouse, or a label, for its details.
+      advice: Advice
+      at: at {time}
+    day:
+      in_sun: "In: sun"
+      in_lamps: "In: lamps"
+      in_pipes: "In: pipes"
+      out_cover: "Out: cover"
+      out_air: "Out: vent air"
+      out_water: "Out: evaporated water"
+      remainder: Remainder
+      remainder_value: "{mj} ({share}% of the heat in)"
+    wi:
+      title: What if
+      vents_before: Every vent opening at
+      vents_after: of what ran
+      vents_label: vents at {pct}%
+      screen: Screen closed in every dark hour
+      lamps_off: Lamps off all day
+      running: Running the balance…
+      unavailable: "What-if unavailable: {error}"
+      pipe_heat: Pipe heat
+      humid_hours: Hours ≥ {rh}% RH
+      max: max {rh}%
+      surplus: Surplus heat to vent
+      note: Same air temperature as measured; changes against the balance under the real settings.
+    level:
+      act: Act
+      consider: Consider
+      info: Note
+      ok: OK
+    advice:
+      sub_one: "For {date}, as the twin would have advised it: {n} point to act on or consider."
+      sub_many: "For {date}, as the twin would have advised it: {n} points to act on or consider."
+    impact:
+      mj: "{mj} MJ/m² pipe heat"
+      lamp_h: "{h} lamp-hours"
+      jcm2: "{v} J/cm² against the target"
+      humid: "{h} h humid"
+      dark: "{h} h dark"
+      lag: "{h} h after waking"
+      ppm: "{ppm} ppm"
+    tile:
+      pipe_heat: Pipe heat
+      pipe_heat_sub: estimated from the pipe temperatures
+      day_length: Day length
+      day_length_sub: sun {sun} + lamps {lamps} · dark {dark} h
+      lamps: Lamps
+      lamps_sub: target needed {needed} h · longest day {longest} h
+      light_sum: Light sum
+      light_sum_sub: sun {sun} · target {target}
+      crop_water: Crop water
+      crop_water_sub: irrigation {irr} · drain {drain}
+      humid: Humid hours
+      humid_sub: RH ≥ {rh}% · target ≤ {target} h
+      woke: Crop woke
+      woke_sub: "{lag} min after {cause} ({trigger})"
+      no_woke: no clear rise on the scale
+    tm:
+      fetching: Fetching the sun forecast…
+      aria: Tomorrow's forecast sun per hour
+      bar: "{hour}:00 · sun {v} J/cm²"
+      no_lamps_above: above this, no lamps
+      unit: sun, J/cm² per hour
+      none: No schedule reaches {target} J/cm² while keeping {dark} h dark.
+      zero: "The sun alone should reach {target} J/cm²: no lamps needed for the target."
+      need_html: >-
+        To reach {target} J/cm²: <strong>{h} lamp-hours</strong> in one block (½ h of it
+        the crop waking up), outside the {dark} h rest and away from strong sun.
+      forecast: "{date}: forecast sun {sun} J/cm² over {h} h of daylight."
+      how: How?
+      longest: The longest day ({h} lamp-hours, {dark} h rest) would give ~{light} J/cm²
+      longest_more: ", {more} lamp-hours more than the target needs"
+      source: >-
+        Sun forecast: OpenMeteo, hourly global radiation; {k} J/cm² per full lamp-hour.
+        No prices: when to put the lamp-hours is left to the grower.
+      unavailable: "Tomorrow's light unavailable: {error}"
+    load:
+      loading: Loading the greenhouse…
+      no_data: No data for this day.
+      failed: "Could not load the day: {error}"

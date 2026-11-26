@@ -694,3 +694,36 @@ def test_metrics_is_scrapeable_without_a_session_and_reports_db_down(client):
         resp = anonymous.get("/metrics", follow_redirects=False)
     assert resp.status_code == 200
     assert 'wp6_sync_up{twin="red"} 0' in resp.text
+
+
+def test_greenhouse_renders_not_connected_page(client):
+    from wp6_data.red.routes.greenhouse import page_title
+
+    resp = client.get("/greenhouse")
+    assert resp.status_code == 200
+    assert "Database not connected" in resp.text
+    assert page_title() in resp.text
+
+
+def test_pages_follow_the_language_choice_and_remember_it(client):
+    # the browser's language first, then an explicit choice, which the cookie keeps
+    resp = client.get("/greenhouse", headers={"Accept-Language": "nl-NL,nl;q=0.9,en;q=0.5"})
+    assert '<html lang="nl"' in resp.text
+    assert "Database niet verbonden" in resp.text
+    resp = client.get("/greenhouse?lang=de")
+    assert '<html lang="de"' in resp.text
+    assert "Datenbank nicht verbunden" in resp.text
+    assert resp.cookies.get("lang") == "de"
+    resp = client.get("/greenhouse", headers={"Accept-Language": "nl"})
+    assert '<html lang="de"' in resp.text
+
+
+def test_greenhouse_api_says_unavailable_without_a_database(client):
+    assert client.get("/greenhouse/api/day").status_code == 503
+    assert client.get("/greenhouse/api/whatif?date=2026-01-14&screen_dark=1").status_code == 503
+
+
+def test_greenhouse_whatif_rejects_unknown_lamp_settings(client):
+    assert client.get("/greenhouse/api/whatif?date=2026-01-14&lamps=dim").status_code == 422
+    # the price-driven planner's schedule is not offered: the page has no prices
+    assert client.get("/greenhouse/api/whatif?date=2026-01-14&lamps=plan").status_code == 422

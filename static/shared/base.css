@@ -151,6 +151,9 @@
     .card-bg-energy::after {
         background-image: url(/static/cards/energy.svg);
     }
+    .card-bg-greenhouse::after {
+        background-image: url(/static/cards/greenhouse.svg);
+    }
 
     /* --- Stats cards --- */
     .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
@@ -633,3 +636,11 @@
     [data-theme="dark"] .js-plotly-plot {
         filter: invert(0.88) hue-rotate(180deg);
     }
+
+/* language switch in the nav: EN · DE · NL, one compact group */
+.dashboard-nav .nav-group.nav-lang { gap: 0.1rem; }
+.dashboard-nav .nav-lang a { font-size: 0.72rem; letter-spacing: 0.04em; padding: 0.1rem 0.3rem;
+                             border-radius: 4px; opacity: 0.6; text-decoration: none; }
+.dashboard-nav .nav-lang a:hover { opacity: 1; }
+.dashboard-nav .nav-lang a.is-current { opacity: 1; font-weight: 700;
+                                        background: var(--dashboard-surface-hover, rgba(0, 0, 0, 0.06)); }

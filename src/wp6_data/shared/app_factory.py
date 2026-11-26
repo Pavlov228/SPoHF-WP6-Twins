@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from wp6_data.shared import i18n
 from wp6_data.shared.auth import NotAuthenticated, verify_session_user
 from wp6_data.shared.export import make_download_router
 from wp6_data.shared.observability import setup_observability
@@ -55,6 +56,22 @@ async def _set_user_context(request: Request, call_next):
         return await call_next(request)
     finally:
         _current_user.reset(token)
+
+
+async def _set_language(request: Request, call_next):
+    """Serve the request in the visitor's language; remember an explicit ``?lang=``."""
+    chosen = request.query_params.get("lang")
+    lang = i18n.negotiate(
+        chosen, request.cookies.get(i18n.COOKIE), request.headers.get("accept-language")
+    )
+    token = i18n.use(lang)
+    try:
+        response = await call_next(request)
+    finally:
+        i18n.reset(token)
+    if chosen and chosen.lower() == lang and request.cookies.get(i18n.COOKIE) != lang:
+        response.set_cookie(i18n.COOKIE, lang, max_age=365 * 24 * 3600, samesite="lax")
+    return response
 
 
 def _noop_auth() -> None:
@@ -113,6 +130,11 @@ def create_app(config: TwinConfig) -> FastAPI:
         app.dependency_overrides[verify_session_user] = _noop_auth
 
     # Middleware
+    # A twin without its own catalogues stays English: no switch, no negotiation.
+    i18n.load(i18n.SHARED_DIR, config.i18n_dir)
+    i18n.offer(config.i18n_dir is not None)
+    if i18n.offered():
+        app.add_middleware(BaseHTTPMiddleware, dispatch=_set_language)
     if config.require_auth:
         from wp6_data.config import OIDCSettings
 

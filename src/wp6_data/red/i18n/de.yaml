@@ -1,0 +1,942 @@
+# Red auf Deutsch. Gleiche Schlüssel und {Platzhalter} wie en.yaml; [^id] sind
+# Literaturverweise (greenhouse/references.yaml) und bleiben unübersetzt.
+
+red_home:
+  greenhouse:
+    title: Gewächshaus
+    button: Gewächshaus in 3D
+    description: Wärme- und Wasserdampfströme, Aktivität des Bestands und was der Zwilling rät.
+  dli:
+    title: Lichtanalyse (DLI)
+    button: DLI-Dashboard
+    description: Analyse der täglichen Lichtsumme (Daily Light Integral) und Werkzeuge zur Optimierung.
+  energy:
+    title: Energie
+    button: Belichtung & Heizung
+    description: Lampenstunden und Heizleistung pro Tag, Jahr gegen Jahr.
+  crop_cycles:
+    title: Anbauzyklen
+    button: Kohorten-Wasserfall
+    description: Überlappende 8-Wochen-Fruchtkohorten und das Klima, in dem sie gewachsen sind.
+  multi_height:
+    title: Mehrere Höhen
+    button: Ansichten nach Höhe
+    description: Überblick über Sensordaten in mehreren Höhen.
+  sensor_docx: Sensor-Geräteübersicht herunterladen (docx)
+
+greenhouse:
+  page:
+    title: Gewächshaus
+    sub: >-
+      Was LetsGrow gemessen hat, was die Physik daraus macht und was der Zwilling anders
+      machen würde. Klicken Sie auf einen Teil des Gewächshauses für Details und auf jede
+      Zahl, um zu sehen, wie sie entsteht.
+    day: Tag
+    previous_day: Vorheriger Tag
+    next_day: Nächster Tag
+    latest: Neuester
+    loading: Gewächshaus wird geladen…
+    layers: Ebenen
+    advice: Was der Zwilling rät
+    tomorrow: Licht morgen
+    method: So funktioniert die Physik
+    method_balance_html: >-
+      Alle 15 Minuten wird die zugeführte Wärme — Sonne durch das Glas
+      ({transmission:.0%} Transmission), die elektrische Leistung der Lampen und die
+      Heizungsrohre (geschätzt aus ihrer gemessenen Temperatur) — der abgeführten Wärme
+      gegenübergestellt: durch die Hülle (U-Wert [kalibriert](term:calibrated) an Reds
+      eigenen geschlossenen, dunklen Nächten; mit geschlossenem Energieschirm angenommen
+      ~{screen_saving:.0%} weniger — beides [konfiguriert](cfg:cover)), mit der Lüftungsluft
+      (Luftaustausch gegen Lüftungsöffnung, [kalibriert](term:calibrated) aus der
+      gemessenen Transpiration des Bestands) und als verdunstetes Wasser (Transpiration
+      von der Substratwaage). Was keiner dieser Ströme erklärt, ist der <em>Rest</em>:
+      Wärme, die Luft, Bestand und Konstruktion speichern oder abgeben, plus Modellfehler.
+      Er wird gezeigt, nicht versteckt — groß an sonnigen Sommertagen, wenn voll geöffnete
+      Lüftungen mehr Luft bewegen, als die nachts kalibrierte Kurve kennt.
+    method_whatif_html: >-
+      Was-wäre-wenn-Rechnungen behalten die gemessene Lufttemperatur bei und fragen, wie
+      viel Rohrwärme andere Einstellungen gebraucht hätten und welche Luftfeuchte sie
+      hinterlassen hätten; angegeben als Änderung gegenüber dem tatsächlichen Verlauf,
+      sodass sich der eigene Versatz des Modells aufhebt. Jede Zahl, mit der die Physik
+      rechnet, ist [konfiguriert](cfg:all), jeweils mit ihrer Herkunft; die Begründung der
+      Regeln steht in der [Forschungsnotiz](term:research) des Zwillings.
+    method_no_euros_html: >-
+      Keine Euro: Was Wärme oder Licht kostet, hängt vom Energievertrag und vom Wert der
+      Ernte ab, und beides kennt der Zwilling nicht. Alles steht in MJ/m², Lampenstunden
+      und J/cm².
+
+  note:
+    short_day: LetsGrow hat für diesen Tag weniger als 12 Stunden Klimadaten.
+    no_curtain: "Energieschirm vor dem 21. Mai 2026 nicht von LetsGrow erfasst: offen dargestellt."
+    no_data: Keine LetsGrow-Daten für diesen Tag.
+    no_forecast: Die Strahlungsvorhersage konnte nicht abgerufen werden.
+    forecast_short: Die Vorhersage reicht noch nicht bis morgen.
+
+  pipe:
+    lg_pipe_lower: Rohrschiene (Untenheizung)
+    lg_pipe_growth: Vegetationsrohr
+
+  module:
+    climate:
+      name: Climate B4
+      about: "Das Klimacomputer-Modul für Abteilung B4: die Messbox, die Heizungsrohre, die Lüftungen und die Schirme."
+    lamps:
+      name: Grow light B4
+      about: "Das Belichtungsmodul für Abteilung B4: wann die LED-Lampen an sind und auf welcher Stufe."
+    water:
+      name: Water B4
+      about: "Das Bewässerungsmodul für Abteilung B4: Bewässerung, Drain, EC und die Substratwaage."
+    weather:
+      name: Wetterstation
+      about: "Die eigene Wetterstation des Gewächshauses auf dem Dach: Außentemperatur, Luftfeuchte, Sonne und Wind."
+  tag:
+    lg_temp_outside: Außentemperatur
+    lg_rh_outside: Außenluftfeuchte
+    lg_abs_hum_outside: absolute Außenfeuchte
+    lg_rad: Globalstrahlung
+    lg_wind_speed: Windgeschwindigkeit
+    lg_wind_dir: Windrichtung
+    lg_temp_greenhouse: Gewächshaustemperatur
+    lg_rh_greenhouse: Gewächshausluftfeuchte
+    lg_abs_hum_greenhouse: absolute Gewächshausfeuchte
+    lg_co2: CO₂
+    lg_heating_setpoint: Heizsollwert
+    lg_assim_light_on: Lampen an/aus
+    lg_assim_light_pct: Lampenstufe
+    lg_pipe_lower: Temperatur Rohrschiene
+    lg_pipe_growth: Temperatur Vegetationsrohr
+    lg_pipe_lower_calc: Anforderung Rohrschiene
+    lg_pipe_growth_calc: Anforderung Vegetationsrohr
+    lg_vent_lee: Lüftungen Leeseite
+    lg_vent_wind: Lüftungen Luvseite
+    lg_energy_curtain: Energieschirm
+    lg_substrate_weight: Substratgewicht
+    lg_irrigation: Bewässerungszähler
+    lg_irrigation_starts: Bewässerungsstarts
+    lg_drain: Drainzähler
+    lg_drain_ec: Drain-EC
+
+  cfg:
+    source:
+      calibrated: An Reds Daten kalibriert
+      literature: Aus der Literatur
+      assumed: Angenommen
+      grower: Wert des Gärtners
+      twin: Einstellung des Zwillings
+    cover:
+      title: Glashülle
+      transmission: {label: Sonne durch Glas und Konstruktion, unit: ""}
+      u_open: {label: Wärmeverlust der Hülle (U), unit: W/m²·K}
+      u_wind: {label: Zusätzlicher Verlust pro m/s Wind, unit: W/m²·K}
+      screen_saving: {label: Einsparung durch geschlossenen Schirm, unit: ""}
+      screen_transmission: {label: Sonne durch geschlossenen Schirm, unit: ""}
+      reflected_share: {label: Von Bestand und Boden reflektierte Sonne, unit: ""}
+      cover_temperature_share: {label: Glastemperatur (Anteil von außen nach innen), unit: ""}
+      condensation_rate: {label: Kondensationsrate am Glas, unit: m/s}
+    ventilation:
+      title: Lüftungskurve
+      point: bei {opening} Lüftungsöffnung
+      unit: m³ Luft pro m² pro Stunde
+    lamps:
+      title: Lampen
+      par: {label: Licht bei voller Leistung, unit: µmol/m²/s}
+      radiation_eq: {label: Außenlicht-Äquivalent pro Lampenstunde, unit: J/cm²}
+      efficacy: {label: LED-Effizienz, unit: µmol/J}
+      power: {label: Elektrische Leistung (Licht ÷ Effizienz), unit: W/m²}
+    pipes:
+      title: Heizungsrohre
+      value: ⌀ {diameter_mm} mm, {length:g} m pro m² Grundfläche
+    crop_water:
+      title: Wasser des Bestands
+      scale_area_m2: {label: Bestand auf der Waage, unit: m²}
+      intercept: {label: "Transpirationsform: Grundwert", unit: ml/m²/h}
+      per_sun_w: {label: …pro W/m² Sonne innen, unit: ml/m²/h}
+      per_lamp_w: {label: …pro W/m² Lampenleistung, unit: ml/m²/h}
+      per_hd: {label: …pro g/m³ Feuchtedefizit, unit: ml/m²/h}
+      per_pipe_w: {label: …pro W/m² Rohrwärme, unit: ml/m²/h}
+    rules:
+      title: Regeln und Schwellen
+      light_target_jcm2: {label: Lichtziel pro Tag, unit: J/cm²}
+      dark_min_h: {label: Ununterbrochene Dunkelheit mindestens, unit: h}
+      wake_lamp_h: {label: Lichtverlust pro Einschalten beim Aufwachen, unit: Lampenstunde}
+      sun_max_w: {label: Keine Lampen über dieser Sonne, unit: W/m²}
+      humid_rh: {label: Feucht ab, unit: "% rel. F."}
+      humid_hours_target: {label: Feuchte Stunden pro Tag höchstens, unit: h}
+      vent_open_pct: {label: Lüftungen gelten als offen über, unit: "%"}
+      dry_rh: {label: Trockene Luft unter, unit: "% rel. F."}
+      co2_lamp_floor_ppm: {label: CO₂-Markierung während der Belichtung, unit: ppm}
+
+  explain:
+    lg: "LetsGrow, Modul {module}: {tags} — alle 5 Minuten erfasst, hier auf 15 Minuten gemittelt."
+    pipe_geometry: "{label}: ⌀ {diameter_mm} mm, {length:g} m pro m² Grundfläche"
+    t_out:
+      title: Außentemperatur
+      how: Gemessen, nicht berechnet.
+      source: "{lg}"
+      read: >-
+        Bestimmt den Wärmeverlust der Hülle: Jedes °C zwischen innen und außen kostet
+        ~{u_open:g} W/m² Grundfläche ([kalibriert](term:calibrated) an Red; siehe
+        Glashülle).
+    rh_out:
+      title: Außenluftfeuchte
+      how: >-
+        Gemessene relative Luftfeuchte; die Bilanz verwendet die daneben erfasste
+        [absolute Feuchte](tag:lg_abs_hum_outside) (g/m³).
+      source: "{lg}"
+      read: >-
+        Lüften tauscht Gewächshausluft gegen diese Luft. Kalte Außenluft enthält selbst bei
+        hoher relativer Feuchte wenig Wasser und trocknet das Haus daher trotzdem.[^dezwart2021]
+    radiation:
+      title: Globalstrahlung (außen)
+      how: >-
+        Auf dem Dach gemessen: das gesamte kurzwellige Sonnenlicht auf eine waagerechte
+        Fläche, W/m². Der Wert bleibt genau 0, bis die Sonne ~5° hoch steht; jeder Wert
+        über 0 zählt daher als natürliches Licht.
+      source: "{lg}"
+      read: >-
+        Etwa {transmission:.0%} gelangen durch das Glas. Über {sun_max_w:g} W/m² bringen
+        die Lampen wenig — die Blattfotosynthese der Tomate flacht oberhalb von etwa 500
+        µmol/m²/s aus Sonne und Lampen ab[^vanhoogdalem2022] — und der Lichtplan rechnet
+        dann nicht mit ihnen.
+    wind:
+      title: Wind
+      how: Gemessene Geschwindigkeit (m/s) und die Richtung, aus der er weht (°, 0 = Nord).
+      source: "{lg}"
+      read: >-
+        Wind trägt Wärme von der Außenseite des Glases ab:[^vanthoor2011a] Jeder m/s erhöht
+        den Verlust der Hülle um {u_wind:g} W/m² pro °C. Die Richtung bestimmt, welche
+        Lüftungen auf der Lee- und welche auf der Luvseite liegen; die 3D-Ansicht öffnet
+        sie entsprechend.
+    t_in:
+      title: Gewächshaustemperatur
+      how: In der Messbox des Klimacomputers gemessen.
+      source: "{lg}"
+      read: >-
+        Ein Messpunkt für den ganzen Block: An den Wänden, unter offenen Lüftungen oder
+        über der Rohrschiene kann die Luft abweichen — dichte Sensornetze in
+        Praxisgewächshäusern finden warme, kalte und feuchte Stellen.[^rezvani2020][^wur_wireless]
+    rh_in:
+      title: Gewächshausluftfeuchte
+      how: >-
+        In der Messbox gemessen. Die Bilanz verwendet die daneben erfasste
+        [absolute Feuchte](tag:lg_abs_hum_greenhouse).
+      source: "{lg}"
+      read: >-
+        Ab {humid_rh:g}% gilt die Luft als feucht: Das Risiko für Grauschimmel (Botrytis)
+        steigt mit den Stunden über 90% relativer Feuchte,[^baptista2012] und dauerhaft
+        feuchte Luft behindert die Calciumversorgung und senkt den Ertrag.[^bakker1991] Das
+        Ziel von höchstens {humid_hours_target:g} feuchten Stunden pro Tag ist eine
+        Einstellung des Zwillings, kein Literaturwert. Ein Messpunkt für den ganzen Block:
+        Die Luft kann von Ort zu Ort abweichen.
+    co2:
+      title: CO₂
+      how: In der Messbox gemessen, ppm.
+      source: "{lg}"
+      read: >-
+        Mehr CO₂ macht das Licht produktiver: Die Lichtnutzungseffizienz steigt um etwa
+        10–15% pro 100 ppm zusätzlichem CO₂,[^nederhoff1994] und der Ertragsgewinn durch
+        zusätzliches Licht ist bei hohem CO₂ größer.[^marcelis2006] Die Marke von
+        {co2_floor:g} ppm ist eine eigene Markierung des Zwillings für Lampenstunden, kein
+        Schwellenwert aus der Literatur. Außenluft enthält etwa 425 ppm,[^noaa_aggi] daher
+        zieht Lüften das Gewächshaus in diese Richtung.
+    heat_sp:
+      title: Heizsollwert
+      how: Die Lufttemperatur, auf die der Klimacomputer heizt.
+      source: "{lg}"
+      read: >-
+        Liegt die Luft deutlich darüber, während die Rohre warm sind, wurde die Rohrwärme
+        für etwas anderes verlangt (ein Minimumrohr, für die Luftfeuchte).
+    delta_t:
+      title: Innen − außen
+      how: Gewächshaustemperatur minus Außentemperatur.
+      source: >-
+        [Gewächshaustemperatur](tag:lg_temp_greenhouse) −
+        [Außentemperatur](tag:lg_temp_outside), beide von LetsGrow.
+      read: Was die Wärme durch das Glas und mit der Lüftungsluft nach außen treibt.
+    lamps:
+      title: Lampen
+      how: >-
+        Ein/aus mal Leistungsstufe. Reds LEDs schalten als eine Anlage und werden nie
+        gedimmt, daher 0 oder 100%; ein 15-Minuten-Schritt kann dazwischen liegen, wenn
+        darin geschaltet wurde.
+      source: "{lg}"
+      read: "Der ganze Block auf einmal: Jede Lampe, die Sie sehen, tut dasselbe."
+    lamp_power:
+      title: Lampenwärme
+      how: >-
+        {par:g} µmol/m²/s bei voller Leistung (das Lampenblatt des Gärtners) ÷ eine
+        ANGENOMMENE Effizienz von {efficacy:g} µmol/J (so wurden kommerzielle LEDs 2020
+        modelliert;[^katzin2021] die praktische Grenze heutiger LEDs liegt bei etwa
+        3,4–4,1[^kusuma2020]) = {power_w} W/m², mal Lampenanteil. Die gesamte elektrische
+        Leistung endet als Wärme im Haus.
+      source: Das Lampenblatt des Gärtners und eine angenommene LED-Effizienz, beides [konfiguriert](cfg:lamps).
+      read: >-
+        Die Wärme der Lampen in der Bilanz. Eine effizientere oder weniger effiziente LED
+        verschiebt sie proportional; es ist kein gemessener Verbrauch.
+    light_sum:
+      title: Lichtsumme
+      how: >-
+        Sonne: die Außenstrahlung über den Tag summiert (W/m² × Sekunden ÷ 10.000 =
+        J/cm²). Lampen: {radiation_eq:g} J/cm² pro voller Lampenstunde, das
+        Außenlicht-Äquivalent des Gärtners aus dem Lampenblatt ([konfiguriert](cfg:lamps)).
+      source: "{lg}"
+      read: >-
+        Das Ziel des Gärtners ist {target:g} J/cm² pro Tag, eine niederländische
+        Faustregel („Tomaten brauchen mindestens 1000 Joule pro Tag"),[^flinterman2015]
+        gezählt in derselben Außenlicht-Einheit. Darüber steigt der Ertrag mit dem Licht
+        weiter: +1% Licht ergibt +0,7–1% Früchte.[^marcelis2006]
+    day_length:
+      title: Tageslänge
+      how: >-
+        Natürliches Licht (Außenstrahlung über 0) plus die Stunden, in denen die Lampen
+        ohne Sonne liefen. Der Rest ist dunkel. Gezählt innerhalb des Kalendertags.
+        Sonnenauf- und -untergang sind astronomisch (Sonnenstand am Standort); die Station
+        registriert Licht erst, wenn die Sonne ~5° hoch steht, daher ist das gemessene
+        natürliche Licht kürzer als die Zeit von Sonnenauf- bis -untergang.
+      source: "{lg}"
+      read: >-
+        Die Regel des Gärtners: ein möglichst langer Tag mit mindestens {dark_min} h
+        ununterbrochener Ruhe. Tomaten brauchen etwa sechs Stunden Dunkelheit, und 18 h
+        Licht sind das praktische Maximum.[^velezramirez2014] Bei gleicher Lichtsumme kann
+        ein kürzerer, hellerer Tag besser sein: 15 h schlugen 18 h in einem Versuch um
+        7%.[^dueck2007] Die Uhr in der Ansicht zeigt Sonne, Lampen und Dunkelheit rund um
+        die Uhr.
+    dark:
+      title: Längste ununterbrochene Dunkelheit
+      how: >-
+        Die längste Spanne ohne Sonne und ohne Lampen. Eine Nacht reicht über Mitternacht,
+        daher kann die Spanne am Vorabend beginnen oder am Morgen danach enden.
+      source: Wie Tageslänge.
+      read: >-
+        Mindestens {dark_min} h, die Regel des Gärtners für die Ruhe des
+        Bestands.[^velezramirez2014] Muss der Tag kürzer werden, beenden Sie ihn lieber
+        früher am Abend, statt ihn später am Morgen zu beginnen.[^vantongerlo2025]
+    lamp_h_needed:
+      title: Lampenstunden, die das Ziel brauchte
+      how: >-
+        Die wenigsten ganzen Lampenstunden, die die Sonne des Tages auf {target:g} J/cm²
+        bringen, mit ≥ {dark_min} h ununterbrochener Dunkelheit, ohne Lampen über
+        {sun_max_w:g} W/m² draußen und mit {wake:g} Lampenstunde Verlust pro Einschalten,
+        während der Bestand aufwacht (an der Waage gemessen). Exakt gelöst.
+      source: Die Sonne dieses Tages und die Regeln des Gärtners, wie [konfiguriert](cfg:rules).
+      read: Lampenstunden darüber hinaus dienten der Regel des längsten Tages, nicht dem Lichtziel.
+    lamp_h_longest_day:
+      title: Lampenstunden des längsten Tages
+      how: Jede Stunde mit Sonne unter {sun_max_w:g} W/m², abzüglich der {dark_min} h Ruhe.
+      source: Die Sonne dieses Tages und die Regeln des Gärtners, wie [konfiguriert](cfg:rules).
+      read: Was die Regel des längsten Tages verlangt; vergleichen Sie mit dem, was das Ziel brauchte.
+    pipe_temp:
+      title: Rohrtemperaturen
+      how: >-
+        Gemessene Wassertemperatur jedes Heizkreises; in Klammern die Temperatur, die der
+        Klimacomputer angefordert hat.
+      source: >-
+        {lg} Angefordert: [Anforderung Rohrschiene](tag:lg_pipe_lower_calc),
+        [Anforderung Vegetationsrohr](tag:lg_pipe_growth_calc).
+      read: >-
+        Ein Kreis heizt den ganzen Block: Alle seine Rohre führen dasselbe Wasser. Farbe in
+        der Ansicht: Stahl bei Lufttemperatur, orange glühend, je heißer es wird.
+    pipe_heat:
+      title: Rohrwärme
+      how: >-
+        Pro Kreis freie Konvektion nach Bot (1983): 1,99·π·d·L·ΔT^1,32, plus Strahlung
+        ε·σ·π·d·L·(Tp⁴ − Ta⁴) mit ε = {emissivity:g}, wobei ΔT Rohr- minus Lufttemperatur
+        ist (wie in den Gewächshausmodellen von Vanthoor und
+        GreenLight).[^vanthoor2011a][^katzin2020] Geometrie ([konfiguriert](cfg:pipes);
+        ANGENOMMEN, aus dem Referenzgewächshaus von GreenLight; Reds eigene Rohre sind
+        nicht bestätigt): {pipes}.
+      source: "{lg}"
+      read: >-
+        Wärme, die die Rohre an das Haus abgeben, W/m² Grundfläche: eine Schätzung aus den
+        Rohrtemperaturen, keine Zählerablesung.
+    vent_pos:
+      title: Lüftungsöffnung
+      how: >-
+        Gemessene Öffnung der Lüftungen auf Lee- und Luvseite, % ihres Weges. Die Bilanz
+        verwendet den Mittelwert beider.
+      source: "{lg}"
+      read: >-
+        Jede Seite bewegt sich als Ganzes für den ganzen Block. In der Ansicht folgt die
+        Leeseite der Windrichtung.
+    air_exchange:
+      title: Luftaustausch
+      how: >-
+        Aus der mittleren Lüftungsöffnung über eine [konfigurierte](cfg:ventilation), an
+        Red [kalibrierte](term:calibrated) Kurve (m³ Luft pro m² Grundfläche pro Stunde):
+        {curve}, dazwischen linear. Die Kurve wurde so angepasst, dass der Wasserdampf, den
+        der Bestand messbar transpiriert, mit der Luft hinausgeht.
+      source: >-
+        Die [konfigurierte](cfg:ventilation) Kurve, angepasst an Reds eigene LetsGrow-Daten
+        von 2023–26.
+      read: >-
+        Überwiegend an Nächten und milden Stunden angepasst: An sonnigen Tagen mit weit
+        offenen Lüftungen ist der echte Austausch vermutlich höher (siehe Rest).
+    ventilation:
+      title: Wärme mit der Lüftungsluft
+      how: >-
+        Luftaustausch × {rho_cp:g} J/m³K (Wärme, die ein m³ Luft pro °C aufnimmt)[^fao56] ×
+        (innen − außen).
+      source: >-
+        Luftaustausch, [Gewächshaustemperatur](tag:lg_temp_greenhouse),
+        [Außentemperatur](tag:lg_temp_outside).
+      read: >-
+        Wärme, die als warme Luft gegen kalte getauscht wird. Nur die fühlbare Wärme: den
+        Wasserdampf, den sie hinausträgt, verbucht die Bilanz unter verdunstetem Wasser.
+    vapour_out:
+      title: Wasserdampf mit der Lüftungsluft
+      how: Luftaustausch × (absolute Feuchte innen − außen).
+      source: >-
+        Luftaustausch, [absolute Feuchte innen](tag:lg_abs_hum_greenhouse) und
+        [außen](tag:lg_abs_hum_outside).
+      read: >-
+        Wasser, das die Luft hinausträgt. Bleibt es hinter der Transpiration des Bestands
+        zurück, wird das Haus feuchter (oder es kondensiert am Glas).
+    screen_pos:
+      title: Energieschirm
+      how: Gemessener geschlossener Anteil.
+      source: "{lg} LetsGrow liefert ihn erst ab dem 21. Mai 2026."
+      read: >-
+        Geschlossen senkt er den Verlust der Hülle um ANGENOMMENE ~{screen_saving:.0%}
+        (an Red noch nicht gemessen; keine geprüfte Quelle für den Wert) und lässt
+        ~{screen_transmission:.0%} der Sonne durch — beides [konfiguriert](cfg:cover).
+    cover:
+      title: Wärme durch die Hülle
+      how: >-
+        U × (innen − außen), mit U = {u_open:g} + {u_wind:g} × Wind (W/m² Grundfläche pro
+        °C) × (1 − {screen_saving:g} × Schirmanteil). {u_open:g} ist an Reds geschlossenen,
+        dunklen, lampenfreien Nächten [kalibriert](term:calibrated); der Windterm ist
+        LITERATUR[^vanthoor2011a] und die Schirmeinsparung eine ANNAHME — alles
+        [konfiguriert](cfg:cover).
+      source: >-
+        [Gewächshaustemperatur](tag:lg_temp_greenhouse),
+        [Außentemperatur](tag:lg_temp_outside), [Windgeschwindigkeit](tag:lg_wind_speed)
+        und [Energieschirm](tag:lg_energy_curtain) von LetsGrow; die Eigenschaften der
+        Hülle sind [konfiguriert](cfg:cover).
+      read: "Meist der größte Verlust in einer Winternacht: Glas, Giebel und Undichtigkeiten zusammen."
+    sun:
+      title: Im Haus gehaltene Sonne
+      how: >-
+        Außenstrahlung × {transmission:g} durch Glas und Konstruktion
+        (× {screen_transmission:g} unter geschlossenem Schirm) × (1 − {reflected_share:g})
+        für das, was Bestand und Boden wieder hinausreflektieren (LITERATUR).[^goudriaan1994]
+        Alle drei Anteile sind [konfiguriert](cfg:cover).
+      source: "{lg}"
+      read: >-
+        Sonnenwärme, die im Haus bleibt: an einem sonnigen Tag weit mehr, als die Rohre
+        liefern.
+    residual:
+      title: Rest (gespeichert / ungeklärt)
+      how: >-
+        Wärme hinein (Sonne + Lampen + Rohre) minus Wärme hinaus (Hülle + Lüftungsluft +
+        verdunstetes Wasser).
+      source: Die Bilanz selbst.
+      read: >-
+        Wärme, die Luft, Bestand, Boden und Konstruktion speichern (positiv, Erwärmung) oder
+        abgeben (negativ), plus Modellfehler. Einige % an Wintertagen; groß an sonnigen
+        Sommertagen, wenn offene Lüftungen mehr Luft bewegen, als die Kurve kennt. Wird nie
+        auf die anderen Ströme verteilt.
+    transpiration:
+      title: Transpiration des Bestands
+      how: >-
+        Zwischen den Bewässerungspulsen — ab {quiet_min} Minuten nach einem Puls, wenn die
+        Matte nicht mehr abläuft — der Gewichtsverlust der Waage über 30 Minuten ÷
+        {scale_area:g} m² Bestand, den sie trägt[^degelder2016] (sie nimmt ~{scale_area:g}
+        kg pro l/m² Bewässerung zu). Dazwischen füllt eine [kalibrierte](term:calibrated),
+        [konfigurierte](cfg:crop_water) Form die Lücken
+        (ml/m²/h = {tr_intercept:g} + {tr_sun:g}·Sonne + {tr_lamp:g}·Lampen +
+        {tr_hd:g}·Feuchtedefizit + {tr_pipe:g}·Rohrwärme), skaliert, sodass der Tag zur
+        Wasserbilanz passt.
+      source: "{lg}"
+      read: >-
+        Die Aktivität des Bestands: wie stark er Wasser zieht. ‚gemessen' = die Waage,
+        ‚modelliert' = die Form. Eine Waage, ein Rinnenabschnitt: Der Rest des Blocks kann
+        abweichen.
+    evaporation:
+      title: Wärme als verdunstetes Wasser
+      how: >-
+        Transpiration × {latent_mj:g} MJ pro kg verdunstetem Wasser, die
+        Verdampfungswärme bei etwa 20 °C.[^fao56]
+      source: Transpiration des Bestands.
+      read: >-
+        Der Bestand kühlt das Haus durch Verdunstung; diese Wärme geht mit dem Wasserdampf
+        durch die Lüftungen hinaus oder kondensiert am Glas.
+    wake:
+      title: Wann der Bestand aufwachte
+      how: >-
+        Nach dem Einschalten der Lampen im Dunkeln (oder nach Sonnenaufgang): der Zeitpunkt,
+        an dem die Transpiration die Hälfte des Weges von ihrem vorherigen Niveau bis zu
+        ihrem Plateau 2–4 h später zurückgelegt hat.
+      source: Transpiration von der Waage; die Lampen- und Strahlungsdaten.
+      read: >-
+        Nach dem Einschalten der Lampen braucht die Fotosynthesekapazität etwa 30 Minuten,
+        um sich aufzubauen;[^dueck2007] die Waage zeigt dieselbe Verzögerung in der
+        Transpiration — etwa {wake:g} Lampenstunde pro Einschalten, die der Lichtplan
+        einrechnet.
+    weight:
+      title: Waagengewicht
+      how: Gemessenes Gewicht eines Rinnenabschnitts mit Matten und Pflanzen.
+      source: "{lg}"
+      read: >-
+        Springt bei jedem Bewässerungspuls nach oben und fällt, während der Bestand trinkt.
+        Sie trägt ~{scale_area:g} m² Bestand ([kalibriert](term:calibrated) daran, wie viel
+        sie pro Bewässerung zunimmt) — eine Stichprobe des Blocks.
+    irrigation:
+      title: Bewässerung heute
+      how: >-
+        Der tägliche Zähler von LetsGrow, abgelesen kurz bevor er um Mitternacht
+        zurückgesetzt wird (bis 2025 um 23:00).
+      source: "{lg}"
+      read: Gegebenes Wasser pro m², gleich für den ganzen Ventilabschnitt.
+    drain:
+      title: Drain heute
+      how: Täglicher Zähler, abgelesen wie die Bewässerung; der Anteil ist Drain ÷ Bewässerung.
+      source: "{lg}"
+      read: >-
+        Wo der Messer sitzt, ist nicht erfasst; ein Drainmesser erfasst meist einige
+        Rinnen, nicht den Block. Er läuft den Pulsen um Stunden hinterher, daher wird nur
+        die Tagessumme verwendet.
+    ec_drain:
+      title: Drain-EC
+      how: Gemessene elektrische Leitfähigkeit des Drainwassers, mS/cm.
+      source: "{lg}"
+      read: >-
+        Über dem EC der Bewässerung: Die Matte konzentriert Salze (der Bestand nahm mehr
+        Wasser als Nährstoffe auf).
+    crop_water:
+      title: Wasser des Bestands
+      how: >-
+        Bewässerung − Drain − Gewichtsänderung der Waage über den Tag (÷ {scale_area:g}
+        m²); verworfen, wenn unplausibel (ein Kulturwechsel).
+      source: "{lg}"
+      read: >-
+        Was der Bestand über den Tag transpiriert hat, l/m²: die Summe, auf die die
+        stündliche Transpiration skaliert wird.
+    humid_h:
+      title: Feuchte Stunden
+      how: Stunden mit gemessener relativer Feuchte ab {humid_rh:g}%.
+      source: "{lg}"
+      read: >-
+        Ziel: höchstens {humid_hours_target:g} h pro Tag. Weit darunter zu bleiben kostet
+        Wärme (Rohre an bei offenen Lüftungen); Feuchte über pflanzenbasierte Grenzen statt
+        über einen festen Sollwert zu regeln, sparte in Versuchen Energie.[^korner2003]
+    heat_mj:
+      title: Rohrwärme über den Tag
+      how: Die Rohrwärme über den Tag summiert, MJ pro m² Grundfläche.
+      source: Wie Rohrwärme.
+      read: >-
+        Die Heizung des Tages in Energieeinheiten, vergleichbar über Tage. Keine
+        Gaszählerablesung.
+    lamp_h:
+      title: Lampenstunden
+      how: Stunden bei voller Leistung, über den Tag summiert.
+      source: "{lg}"
+      read: Vergleichen Sie mit den Lampenstunden, die das Lichtziel brauchte.
+    sensors:
+      title: Was wo gemessen wird
+      how: >-
+        Der Klimacomputer misst die Luft in einer Messbox und das Wasser des Bestands an
+        einer Waage unter einer Rinne. Die Wetterstation steht draußen auf dem Dach.
+        Lampen, Rohre, Lüftungen und Schirm werden für den ganzen Block eingestellt.
+      source: >-
+        LetsGrow-Module [Climate B4](mod:climate) (Messbox, Rohre, Lüftungen, Schirm),
+        [Water B4](mod:water) (Waage, Bewässerung, Drain), [Grow light B4](mod:lamps) und
+        die [Wetterstation](mod:weather). Der genaue Ort der Box im Block ist nicht
+        erfasst; die Ansicht setzt sie in die Hausmitte.
+      read: >-
+        Alles, was der Zwilling über Luft und Bestand sagt, beruht auf diesem einen Ort,
+        während die Aktoren überall wirken. An Wänden und Giebeln, unter offenen Lüftungen,
+        über der Rohrschiene oder in einer Ecke kann das Klima abweichen — dichte Sensornetze
+        in Praxisgewächshäusern finden warme, kalte und feuchte Stellen[^rezvani2020][^wur_wireless]
+        — Mikroklimata, die diese Daten nicht sehen. Der Ring in der Ansicht veranschaulicht
+        das nur; wie weit eine Box für den Block steht, ist nicht bekannt.
+
+  advice:
+    light_sum:
+      not_judged:
+        title: Lichtsumme nicht bewertet
+        detail: Für diesen Tag sind weniger als 23 Stunden erfasst.
+      sun_enough:
+        title: Die Sonne allein erreichte das Lichtziel
+        detail: "{sun} J/cm² Sonne gegenüber {target:.0f}; die Lampen blieben aus."
+      short:
+        title: Lichtsumme {light} J/cm², unter dem Ziel von {target:.0f}
+        detail: >-
+          Sonne {sun} J/cm² und {lamp_h:.1f} Lampenstunden. Jede volle Lampenstunde bringt
+          {k:.0f} J/cm²; mit ≥ {dark_min} h Dunkelheit brauchte das Ziel {needed:.0f} h.
+      extra:
+        title: "{extra:.1f} Lampenstunden über dem Lichtziel"
+        detail: &light_detail_de >-
+          Die Lampen liefen {lamp_h:.1f} h für eine Lichtsumme von {light} J/cm². In ganzen
+          Stunden, mit ≥ {dark_min} h Dunkelheit und {wake:g} h Aufwachzeit des Bestands pro
+          Einschalten, brauchten {target:.0f} J/cm² {needed:.0f} h. Stunden darüber hinaus
+          dienen der Regel des längsten Tages, nicht dem Lichtziel.
+      matched:
+        title: Lampen passend zum Lichtziel ({lamp_h:.1f} h)
+        detail: *light_detail_de
+    heat_vented:
+      wasted:
+        title: "{mj:.1f} MJ/m² Rohrwärme gingen durch offene Lüftungen hinaus"
+        detail: >-
+          Die Rohre waren warm, während die Lüftungen bei trockener Luft (rel. Feuchte <
+          {dry_rh:g}%) über {vent_open:g}% offen standen und die Luft schon über ihrem
+          Heizsollwert lag. Diese Wärme wurde weder für Temperatur noch für Feuchte
+          gebraucht: Senken Sie in diesen Stunden das Minimumrohr.
+      ok:
+        title: Keine Wärme durch die Lüftungen verloren
+        detail: Rohrwärme und offene Lüftungen bei trockener Luft fielen nicht zusammen.
+    screen:
+      not_logged:
+        title: Schirmstellung nicht erfasst
+        detail: >-
+          LetsGrow liefert den Energieschirm erst ab dem 21. Mai 2026; davor wird der Schirm
+          offen dargestellt und seine Einsparung nicht geschätzt.
+      save:
+        title: Den Schirm im Dunkeln zu schließen hätte {saved:.1f} MJ/m² gespart
+        detail: >-
+          Der Energieschirm blieb in dunklen, kalten Stunden offen. Geschlossen kostet er
+          dann kein Licht und senkt den Wärmeverlust der Hülle um angenommene ~{saving:.0%}
+          (an Red noch nicht gemessen).
+      ok:
+        title: Schirm in den dunklen Stunden genutzt
+        detail: Keine dunklen, kalten Stunden mit offenem Schirm.
+    humidity:
+      humid:
+        title: "{hours:.1f} h über {rh:g}% rel. Feuchte"
+        detail: >-
+          Lange feuchte Phasen erhöhen das Botrytis-Risiko[^baptista2012] und bremsen den
+          Calciumtransport.[^bakker1991] Lüften Sie einen Spalt oder öffnen Sie den Schirm
+          einen Spalt, bevor Sie die Rohrwärme erhöhen; das entfernt Wasserdampf mit
+          weniger Energie.[^dezwart2021]
+      dried:
+        title: Stärker getrocknet als nötig
+        detail: >-
+          Weniger als eine halbe Stunde über {rh:g}% rel. Feuchte, erkauft mit Rohrwärme,
+          die hinausgelüftet wurde. In der [Auswertung von vier Saisons](term:research)
+          durch den Zwilling kostete der Schritt von ~3 auf ~1 feuchte Stunde pro Tag ~30%
+          mehr Wärme.
+      ok:
+        title: "{hours:.1f} h über {rh:g}% rel. Feuchte"
+        detail: Innerhalb des Ziels von {target:g} h pro Tag.
+    dark:
+      short:
+        title: Nur {hours:.1f} h ununterbrochene Dunkelheit
+        detail: >-
+          Der Bestand braucht mindestens {dark_min} h ununterbrochene
+          Dunkelheit.[^velezramirez2014] Muss der Tag kürzer sein, schalten Sie abends
+          früher aus, statt morgens später einzuschalten.[^vantongerlo2025]
+      ok:
+        title: "{hours:.1f} h ununterbrochene Dunkelheit"
+        detail: >-
+          Tageslänge {light_h:.1f} h (Sonne {sun_h:.1f} h, nur Lampen {lamp_h:.1f} h); der
+          Rest hielt die Regel von ≥ {dark_min} h ein.
+    co2:
+      low:
+        title: CO₂ {ppm} ppm, während die Lampen liefen
+        detail: >-
+          Jede Lampenstunde bringt bei höherem CO₂ mehr Früchte.[^nederhoff1994] Es fällt,
+          wenn die Lüftungen nach dem Einschalten öffnen; dann zu dosieren oder weniger zu
+          lüften, erhöht den Wert der Lampen.
+    irrigation:
+      late:
+        title: Erste Bewässerung {lag:.1f} h nach dem Aufwachen des Bestands
+        detail: >-
+          Die Transpiration stieg um {wake}; der erste Start kam um {start}. Näher am
+          gemessenen Aufwachen zu starten, verhindert, dass die Matte zuerst austrocknet.
+      early:
+        title: Erste Bewässerung {lag:.1f} h vor dem Aufwachen des Bestands
+        detail: >-
+          Der erste Start kam um {start}, bevor die Transpiration stieg ({wake}); Wasser für
+          einen schlafenden Bestand läuft größtenteils ab.
+      ok:
+        title: Bewässerung begann um {start}
+        detail: Nahe am Aufwachen des Bestands ({wake}).
+
+  ui:
+    close: Schließen
+    no_data: Keine Daten.
+    play: Abspielen
+    time_of_day: Tageszeit
+    tip:
+      configured: Konfigurierte Werte
+      all: Alle konfigurierten Werte
+      configured_note: Mit diesen Zahlen rechnet der Zwilling; daneben steht jeweils ihre Herkunft.
+      series: LetsGrow-Datenreihe
+      series_note: alle 5 Minuten erfasst
+      module: LetsGrow-Modul
+    term:
+      calibrated: >-
+        Vom Team des Zwillings an Reds eigene LetsGrow-Daten (2023–26) angepasst, statt aus
+        einem Handbuch übernommen — er beschreibt also dieses Gewächshaus und wird neu
+        angepasst, wenn sich das Gewächshaus oder seine Sensoren ändern.
+      research: >-
+        Die Forschungsnotiz des Zwillings: vier Saisons von Reds LetsGrow-Daten (2023–26),
+        ausgewertet nach Wärme, Licht, Luftfeuchte und Aktivität des Bestands, mit der
+        Literatur hinter jeder Regel. Beim Team des Zwillings erhältlich.
+    comp:
+      lamps: Lampen
+      pipes: Heizungsrohre
+      vents: Dachlüftung
+      screen: Energieschirm
+      crop: Bestand
+      substrate: Substrat
+      weather: Wetterstation
+      cover: Glashülle
+      sensors: Sensoren (hier gemessen)
+    blurb:
+      lamps: LED-Toplights über jeder Reihe, als eine Anlage geschaltet. Klicken Sie auf eine Zahl, um zu sehen, wie sie entsteht.
+      pipes: >-
+        Zwei Warmwasserkreise für den ganzen Block: die Rohrschiene am Boden und das
+        Vegetationsrohr im Bestand. Ihre Wärme wird aus der gemessenen Wassertemperatur
+        geschätzt.
+      vents: >-
+        Am First angeschlagene Dachlüftungen: Öffnen hebt die untere Kante. Lee- und
+        Luvseite werden getrennt gefahren, jeweils für den ganzen Block.
+      screen: Energieschirm auf Rinnenhöhe, in jedem Feld von seiner Rinne aus zugezogen.
+      crop: Hochdraht-Tomate. Ihre Aktivität ist ihre Transpiration, gewogen an der Substratwaage unter einem Rinnenabschnitt.
+      substrate: Steinwollmatten in Hängerinnen. Ein Rinnenabschnitt hängt an der Waage.
+      weather: Die Wetterstation von LetsGrow auf dem Dach.
+      cover: "Glasdach und Wände: was von der Sonne hereinkommt und welche Wärme entweicht."
+    flow:
+      sun: Im Haus gehaltene Sonne
+      lamps: Lampen
+      pipes: Heizungsrohre
+      cover: Durch die Hülle
+      ventilation: Mit der Lüftungsluft
+      evaporation: Als verdunstetes Wasser
+      residual: Gespeichert / ungeklärt
+    scope:
+      spot: An einem Ort gemessen
+      block: Ganzer Block
+      outside: Außen
+      model: Berechnet
+      rule: Regel des Gärtners
+    balloon:
+      how: So wird es berechnet
+      source: Woher die Daten kommen
+      read: So ist es zu lesen
+      sources: Quellen
+    legend:
+      sun: Sonne
+      lamps_on: Lampen an
+      dark: dunkel
+      humid: rel. F. ≥ {rh}%
+    layer:
+      zone: Messbereich
+      vapour: Wasserdampf
+      flows: Wärmeströme
+      labels: Beschriftungen
+      roof: Dach & Schirm
+      inside: Innenansicht
+      overview: Übersicht
+    dial:
+      day_length: Tageslänge
+      value: "{light} h Licht: Sonne {sun} h + nur Lampen {lamps} h; längste Dunkelheit {dark} h"
+      sun: Sonne {h} h
+      lamps: Lampen
+      dark: dunkel {h} h (min. {min})
+      sunrise: Sonne {rise}–{set}
+    hud:
+      outside: Außen · {date} {time}
+      inside: Innen · am Messort
+      air: Luft
+      rh: rel. F.
+      sun: Sonne
+      wind: Wind
+      co2: CO₂
+      crop: Bestand
+    pin:
+      "on": an · {w} W/m²
+      "off": aus
+      cover_out: "{w} W/m² hinaus"
+    row:
+      lamps_now: Lampen jetzt
+      lamp_heat_now: Lampenwärme jetzt
+      day_length: Tageslänge
+      day_length_value: "{light} h (Sonne {sun} + nur Lampen {lamps})"
+      longest_dark: Längste Dunkelheit
+      light_sum_today: Lichtsumme heute
+      lamp_h_today: Lampenstunden heute
+      lamp_h_needed: …vom Ziel gebraucht
+      lamp_h_longest: …beim längsten Tag
+      pipe_rail: Rohrschiene
+      growth_pipe: Vegetationsrohr
+      pipe_value: "{temp} °C (angefordert {asked})"
+      heat_into: Wärme ins Haus
+      heat_sp: Heizsollwert
+      heat_sp_value: "{sp} °C (Luft {air})"
+      lee_wind: Lee / Luv
+      air_exchange: Luftaustausch
+      heat_out_air: Wärme mit der Luft hinaus
+      vapour_out: Wasserdampf mit der Luft hinaus
+      rh_inside: Rel. Feuchte innen
+      screen_closed: Schirm geschlossen
+      not_logged: nicht erfasst
+      cover_out: Wärme durch die Hülle
+      delta_t: Innen − außen
+      transpiration: Transpiration
+      measured: gemessen
+      modelled: modelliert
+      evap_heat: Verdunstungswärme
+      air: Luft
+      air_value: "{t} °C, {rh}% rel. F."
+      co2: CO₂
+      woke: Aufgewacht
+      woke_value: "{wake} ({cause} um {trigger}, +{lag} min)"
+      weight: Waagengewicht
+      irr_today: Bewässerung heute
+      drain_today: Drain heute
+      crop_water_today: Wasser des Bestands heute
+      ec_drain: Drain-EC
+      outside_air: Außenluft
+      outside_rh: Rel. Feuchte außen
+      radiation: Globalstrahlung
+      wind: Wind
+      wind_value: "{speed} m/s aus {dir}°"
+      sun_kept: Im Haus gehaltene Sonne
+      box_air: "Messbox: Luft"
+      box_co2: "Messbox: CO₂"
+      scale_weight: "Waage: Gewicht"
+      scale_e: "Waage: Transpiration"
+      roof_out: "Dach: Außenluft"
+      block_lamps: "Ganzer Block: Lampen"
+      block_pipes: "Ganzer Block: Rohre"
+      block_vents: "Ganzer Block: Lüftungen"
+      block_screen: "Ganzer Block: Schirm"
+    cause:
+      lamps: Lampen
+      sunrise: Sonnenaufgang
+    sensors:
+      legend_spot: "steht für den Ort im schattierten Ring: Der Zwilling nimmt an, dass sich der ganze Block so verhält."
+      legend_block: Einstellungen wirken überall zugleich.
+      toggle: Schalten Sie {chip} aus, um den Rest des Blocks ohne Grau zu sehen.
+      link: Wo jeder Sensor sitzt und was das bedeutet →
+    chart:
+      lamps_on: Lampen an, %
+      light_so_far: Licht bisher, J/cm²
+      pipe_heat: Rohrwärme, W/m²
+      vent: Lüftungsöffnung, %
+      rh: rel. F., %
+      screen: Schirm geschlossen, %
+      cover_loss: Hüllenverlust, W/m²
+      co2: CO₂, ppm
+      wind_speed: Windgeschwindigkeit, m/s
+      wind_from: aus, ° (0 = Nord)
+    series:
+      lamps: Lampen
+      sun_lamps: Sonne + Lampen
+      sun: Sonne
+      target: Ziel
+      pipe_rail: Rohrschiene
+      growth_pipe: Vegetationsrohr
+      air: Luft
+      pipes: Rohre
+      lee: Lee
+      windward: Luv
+      rh_inside: rel. F. innen
+      screen: Schirm
+      cover: Hülle
+      measured: gemessen
+      modelled: modelliert
+      co2: CO₂
+      scale_weight: Waagengewicht
+      radiation: Strahlung
+      outside: außen
+      inside: innen
+      sun_in: Sonne hinein
+      cover_loss: Hüllenverlust
+      heat_sp: Heizsollwert
+      kept_inside: im Haus gehalten
+      wind: Wind
+      direction: Richtung
+      as_ran: wie gelaufen
+      what_if: was wäre, wenn
+    panel:
+      balance_at: Energiebilanz um {time}
+      heat_in: Wärme hinein, W/m²
+      heat_out: Wärme hinaus, W/m²
+      remainder: Rest
+      remainder_note: >-
+        Der Rest ist Wärme, die Luft, Bestand und Konstruktion speichern oder abgeben, plus
+        Modellfehler. Klicken Sie auf einen Strom, um zu sehen, wie er berechnet wird.
+      over_day: Über den Tag, MJ/m²
+      click_hint: Klicken Sie auf einen Teil des Gewächshauses oder eine Beschriftung für Details.
+      advice: Rat
+      at: um {time}
+    day:
+      in_sun: "Hinein: Sonne"
+      in_lamps: "Hinein: Lampen"
+      in_pipes: "Hinein: Rohre"
+      out_cover: "Hinaus: Hülle"
+      out_air: "Hinaus: Lüftungsluft"
+      out_water: "Hinaus: verdunstetes Wasser"
+      remainder: Rest
+      remainder_value: "{mj} ({share}% der zugeführten Wärme)"
+    wi:
+      title: Was wäre, wenn
+      vents_before: Jede Lüftungsöffnung bei
+      vents_after: des tatsächlichen Verlaufs
+      vents_label: Lüftungen bei {pct}%
+      screen: Schirm in jeder dunklen Stunde geschlossen
+      lamps_off: Lampen den ganzen Tag aus
+      running: Bilanz wird gerechnet…
+      unavailable: "Was-wäre-wenn nicht verfügbar: {error}"
+      pipe_heat: Rohrwärme
+      humid_hours: Stunden ≥ {rh}% rel. F.
+      max: max. {rh}%
+      surplus: Überschusswärme zum Lüften
+      note: Gleiche Lufttemperatur wie gemessen; Änderungen gegenüber der Bilanz mit den echten Einstellungen.
+    level:
+      act: Handeln
+      consider: Prüfen
+      info: Hinweis
+      ok: OK
+    advice:
+      sub_one: "Für {date}, wie der Zwilling geraten hätte: {n} Punkt zum Handeln oder Prüfen."
+      sub_many: "Für {date}, wie der Zwilling geraten hätte: {n} Punkte zum Handeln oder Prüfen."
+    impact:
+      mj: "{mj} MJ/m² Rohrwärme"
+      lamp_h: "{h} Lampenstunden"
+      jcm2: "{v} J/cm² gegenüber dem Ziel"
+      humid: "{h} h feucht"
+      dark: "{h} h dunkel"
+      lag: "{h} h nach dem Aufwachen"
+      ppm: "{ppm} ppm"
+    tile:
+      pipe_heat: Rohrwärme
+      pipe_heat_sub: geschätzt aus den Rohrtemperaturen
+      day_length: Tageslänge
+      day_length_sub: Sonne {sun} + Lampen {lamps} · dunkel {dark} h
+      lamps: Lampen
+      lamps_sub: Ziel brauchte {needed} h · längster Tag {longest} h
+      light_sum: Lichtsumme
+      light_sum_sub: Sonne {sun} · Ziel {target}
+      crop_water: Wasser des Bestands
+      crop_water_sub: Bewässerung {irr} · Drain {drain}
+      humid: Feuchte Stunden
+      humid_sub: rel. F. ≥ {rh}% · Ziel ≤ {target} h
+      woke: Bestand aufgewacht
+      woke_sub: "{lag} min nach {cause} ({trigger})"
+      no_woke: kein deutlicher Anstieg an der Waage
+    tm:
+      fetching: Sonnenvorhersage wird abgerufen…
+      aria: Vorhergesagte Sonne für morgen pro Stunde
+      bar: "{hour}:00 · Sonne {v} J/cm²"
+      no_lamps_above: darüber keine Lampen
+      unit: Sonne, J/cm² pro Stunde
+      none: Kein Plan erreicht {target} J/cm² mit {dark} h Dunkelheit.
+      zero: "Die Sonne allein sollte {target} J/cm² erreichen: Für das Ziel sind keine Lampen nötig."
+      need_html: >-
+        Für {target} J/cm²: <strong>{h} Lampenstunden</strong> am Stück (½ h davon wacht
+        der Bestand auf), außerhalb der {dark} h Ruhe und nicht bei starker Sonne.
+      forecast: "{date}: vorhergesagte Sonne {sun} J/cm² über {h} h Tageslicht."
+      how: Wie?
+      longest: Der längste Tag ({h} Lampenstunden, {dark} h Ruhe) ergäbe ~{light} J/cm²
+      longest_more: ", {more} Lampenstunden mehr, als das Ziel braucht"
+      source: >-
+        Sonnenvorhersage: OpenMeteo, stündliche Globalstrahlung; {k} J/cm² pro voller
+        Lampenstunde. Keine Preise: Wann die Lampenstunden liegen, entscheidet der Gärtner.
+      unavailable: "Licht für morgen nicht verfügbar: {error}"
+    load:
+      loading: Gewächshaus wird geladen…
+      no_data: Keine Daten für diesen Tag.
+      failed: "Der Tag konnte nicht geladen werden: {error}"

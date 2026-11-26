@@ -1,0 +1,932 @@
+# Red in het Nederlands. Dezelfde sleutels en {plaatshouders} als en.yaml; [^id] zijn
+# literatuurverwijzingen (greenhouse/references.yaml) en worden niet vertaald.
+
+red_home:
+  greenhouse:
+    title: Kas
+    button: Kas in 3D
+    description: Warmte- en waterdampstromen, gewasactiviteit en wat de tweeling adviseert.
+  dli:
+    title: Lichtanalyse (DLI)
+    button: DLI-dashboard
+    description: Analyse van de dagelijkse lichtsom (Daily Light Integral) en hulpmiddelen om te optimaliseren.
+  energy:
+    title: Energie
+    button: Belichting & verwarming
+    description: Lampuren en warmteafgifte per dag, jaar tegen jaar.
+  crop_cycles:
+    title: Teeltcycli
+    button: Cohort-waterval
+    description: Overlappende vruchtcohorten van 8 weken tegen het klimaat waarin ze groeiden.
+  multi_height:
+    title: Meerdere hoogtes
+    button: Weergaven per hoogte
+    description: Overzicht van sensorgegevens op meerdere hoogtes.
+  sensor_docx: Sensoroverzicht downloaden (docx)
+
+greenhouse:
+  page:
+    title: Kas
+    sub: >-
+      Wat LetsGrow mat, wat de natuurkunde ervan maakt en wat de tweeling anders zou doen.
+      Klik op een deel van de kas voor details, en op elk getal om te zien hoe het tot
+      stand komt.
+    day: Dag
+    previous_day: Vorige dag
+    next_day: Volgende dag
+    latest: Laatste
+    loading: De kas wordt geladen…
+    layers: Lagen
+    advice: Wat de tweeling adviseert
+    tomorrow: Licht voor morgen
+    method: Zo werkt de natuurkunde
+    method_balance_html: >-
+      Elke 15 minuten wordt de warmte die binnenkomt — zon door het glas
+      ({transmission:.0%} transmissie), het elektrisch vermogen van de lampen en de
+      verwarmingsbuizen (geschat uit hun gemeten temperatuur) — gezet tegenover de warmte
+      die vertrekt: door het kasdek (U-waarde [gekalibreerd](term:calibrated) op red's eigen
+      gesloten, donkere nachten; met gesloten energiescherm aangenomen ~{screen_saving:.0%}
+      minder — beide [geconfigureerd](cfg:cover)), met de ventilatielucht
+      (luchtuitwisseling tegen raamstand, [gekalibreerd](term:calibrated) uit de gemeten
+      verdamping van het gewas) en als verdampt water (verdamping van de substraatweegschaal).
+      Wat geen van deze verklaart, is de <em>rest</em>: warmte die lucht, gewas en
+      constructie opslaan of afgeven, plus modelfout. Die wordt getoond, niet verstopt —
+      groot op zonnige zomerdagen, als volle ramen meer lucht verplaatsen dan de 's nachts
+      gekalibreerde curve kent.
+    method_whatif_html: >-
+      Wat-als-berekeningen houden de gemeten luchttemperatuur vast en vragen hoeveel
+      buiswarmte andere instellingen nodig hadden gehad en welke luchtvochtigheid ze hadden
+      achtergelaten; gerapporteerd als verandering ten opzichte van wat echt draaide, zodat
+      de eigen afwijking van het model wegvalt. Elk getal waarmee de natuurkunde rekent, is
+      [geconfigureerd](cfg:all), telkens met waar het vandaan komt; de onderbouwing van de
+      regels staat in de [onderzoeksnotitie](term:research) van de tweeling.
+    method_no_euros_html: >-
+      Geen euro's: wat warmte of licht kost, hangt af van het energiecontract en de waarde
+      van het gewas, en die kent de tweeling geen van beide. Alles staat in MJ/m², lampuren
+      en J/cm².
+
+  note:
+    short_day: LetsGrow heeft voor deze dag minder dan 12 uur klimaatgegevens.
+    no_curtain: "Energiescherm vóór 21 mei 2026 niet door LetsGrow vastgelegd: open getekend."
+    no_data: Geen LetsGrow-gegevens voor deze dag.
+    no_forecast: De stralingsvoorspelling kon niet worden opgehaald.
+    forecast_short: De voorspelling reikt nog niet tot morgen.
+
+  pipe:
+    lg_pipe_lower: Buisrail (ondernet)
+    lg_pipe_growth: Groeibuis
+
+  module:
+    climate:
+      name: Climate B4
+      about: "De module van de klimaatcomputer voor afdeling B4: de meetbox, de verwarmingsbuizen, de ramen en de schermen."
+    lamps:
+      name: Grow light B4
+      about: "De belichtingsmodule voor afdeling B4: wanneer de ledlampen aan staan, en op welk niveau."
+    water:
+      name: Water B4
+      about: "De watergiftmodule voor afdeling B4: watergift, drain, EC en de substraatweegschaal."
+    weather:
+      name: Weerstation
+      about: "Het eigen weerstation van de kas op het dak: buitentemperatuur, luchtvochtigheid, zon en wind."
+  tag:
+    lg_temp_outside: buitentemperatuur
+    lg_rh_outside: luchtvochtigheid buiten
+    lg_abs_hum_outside: absolute vochtigheid buiten
+    lg_rad: globale straling
+    lg_wind_speed: windsnelheid
+    lg_wind_dir: windrichting
+    lg_temp_greenhouse: kastemperatuur
+    lg_rh_greenhouse: luchtvochtigheid in de kas
+    lg_abs_hum_greenhouse: absolute vochtigheid in de kas
+    lg_co2: CO₂
+    lg_heating_setpoint: stooktemperatuur
+    lg_assim_light_on: lampen aan/uit
+    lg_assim_light_pct: lampniveau
+    lg_pipe_lower: temperatuur buisrail
+    lg_pipe_growth: temperatuur groeibuis
+    lg_pipe_lower_calc: vraag buisrail
+    lg_pipe_growth_calc: vraag groeibuis
+    lg_vent_lee: ramen lijzijde
+    lg_vent_wind: ramen windzijde
+    lg_energy_curtain: energiescherm
+    lg_substrate_weight: substraatgewicht
+    lg_irrigation: watergiftteller
+    lg_irrigation_starts: giftstarts
+    lg_drain: drainteller
+    lg_drain_ec: drain-EC
+
+  cfg:
+    source:
+      calibrated: Gekalibreerd op red's gegevens
+      literature: Uit de literatuur
+      assumed: Aangenomen
+      grower: Getal van de teler
+      twin: Instelling van de tweeling
+    cover:
+      title: Kasdek
+      transmission: {label: Zon door glas en constructie, unit: ""}
+      u_open: {label: Warmteverlies door het kasdek (U), unit: W/m²·K}
+      u_wind: {label: Extra verlies per m/s wind, unit: W/m²·K}
+      screen_saving: {label: Besparing door een gesloten scherm, unit: ""}
+      screen_transmission: {label: Zon door een gesloten scherm, unit: ""}
+      reflected_share: {label: Zon teruggekaatst door gewas en vloer, unit: ""}
+      cover_temperature_share: {label: Glastemperatuur (aandeel van buiten naar binnen), unit: ""}
+      condensation_rate: {label: Condensatiesnelheid op het glas, unit: m/s}
+    ventilation:
+      title: Ventilatiecurve
+      point: bij {opening} raamstand
+      unit: m³ lucht per m² per uur
+    lamps:
+      title: Lampen
+      par: {label: Licht bij vol vermogen, unit: µmol/m²/s}
+      radiation_eq: {label: Buitenlicht-equivalent per lampuur, unit: J/cm²}
+      efficacy: {label: Led-efficiëntie, unit: µmol/J}
+      power: {label: Elektrisch vermogen (licht ÷ efficiëntie), unit: W/m²}
+    pipes:
+      title: Verwarmingsbuizen
+      value: ⌀ {diameter_mm} mm, {length:g} m per m² vloer
+    crop_water:
+      title: Gewaswater
+      scale_area_m2: {label: Gewas op de weegschaal, unit: m²}
+      intercept: {label: "Verdampingsvorm: basis", unit: ml/m²/u}
+      per_sun_w: {label: …per W/m² zon binnen, unit: ml/m²/u}
+      per_lamp_w: {label: …per W/m² lampvermogen, unit: ml/m²/u}
+      per_hd: {label: …per g/m³ vochtdeficit, unit: ml/m²/u}
+      per_pipe_w: {label: …per W/m² buiswarmte, unit: ml/m²/u}
+    rules:
+      title: Regels en drempels
+      light_target_jcm2: {label: Lichtdoel per dag, unit: J/cm²}
+      dark_min_h: {label: Ononderbroken donker minstens, unit: uur}
+      wake_lamp_h: {label: Lichtverlies per keer aanschakelen tijdens ontwaken, unit: lampuur}
+      sun_max_w: {label: Geen lampen boven deze zon, unit: W/m²}
+      humid_rh: {label: Vochtig vanaf, unit: "% RV"}
+      humid_hours_target: {label: Vochtige uren per dag hooguit, unit: uur}
+      vent_open_pct: {label: Ramen tellen als open boven, unit: "%"}
+      dry_rh: {label: Droge lucht onder, unit: "% RV"}
+      co2_lamp_floor_ppm: {label: CO₂-markering tijdens belichting, unit: ppm}
+
+  explain:
+    lg: "LetsGrow, module {module}: {tags} — elke 5 minuten vastgelegd, hier gemiddeld naar 15 minuten."
+    pipe_geometry: "{label}: ⌀ {diameter_mm} mm, {length:g} m per m² vloer"
+    t_out:
+      title: Buitentemperatuur
+      how: Gemeten, niet berekend.
+      source: "{lg}"
+      read: >-
+        Bepaalt het warmteverlies van het kasdek: elke °C tussen binnen en buiten kost
+        ~{u_open:g} W/m² vloer ([gekalibreerd](term:calibrated) op red; zie Kasdek).
+    rh_out:
+      title: Luchtvochtigheid buiten
+      how: >-
+        Gemeten relatieve luchtvochtigheid; de balans gebruikt de ernaast vastgelegde
+        [absolute vochtigheid](tag:lg_abs_hum_outside) (g/m³).
+      source: "{lg}"
+      read: >-
+        Luchten ruilt kaslucht voor deze lucht. Koude buitenlucht bevat zelfs bij een hoge
+        RV weinig water, en droogt de kas daarom toch.[^dezwart2021]
+    radiation:
+      title: Globale straling (buiten)
+      how: >-
+        Gemeten op het dak: al het kortgolvige zonlicht op een horizontaal vlak, W/m². De
+        waarde blijft precies 0 tot de zon ~5° hoog staat; elke waarde boven 0 telt daarom
+        als natuurlijk licht.
+      source: "{lg}"
+      read: >-
+        Ongeveer {transmission:.0%} komt door het glas. Boven {sun_max_w:g} W/m² voegen de
+        lampen weinig toe — de bladfotosynthese van tomaat vlakt af boven ongeveer 500
+        µmol/m²/s zon plus lamp[^vanhoogdalem2022] — en het lichtplan rekent dan niet op ze.
+    wind:
+      title: Wind
+      how: Gemeten snelheid (m/s) en de richting waar hij vandaan komt (°, 0 = noord).
+      source: "{lg}"
+      read: >-
+        Wind voert warmte af van de buitenkant van het glas:[^vanthoor2011a] elke m/s voegt
+        {u_wind:g} W/m² per °C toe aan het verlies van het kasdek. De richting bepaalt welke
+        ramen aan de lijzijde en welke aan de windzijde liggen; de 3D-weergave opent ze zo.
+    t_in:
+      title: Kastemperatuur
+      how: Gemeten in de meetbox van de klimaatcomputer.
+      source: "{lg}"
+      read: >-
+        Eén meetpunt voor het hele blok: bij de gevels, onder open ramen of boven de
+        buisrail kan de lucht afwijken — dichte sensornetwerken in praktijkkassen vinden
+        warme, koude en vochtige plekken.[^rezvani2020][^wur_wireless]
+    rh_in:
+      title: Luchtvochtigheid in de kas
+      how: >-
+        Gemeten in de meetbox. De balans gebruikt de ernaast vastgelegde
+        [absolute vochtigheid](tag:lg_abs_hum_greenhouse).
+      source: "{lg}"
+      read: >-
+        Vanaf {humid_rh:g}% telt de lucht als vochtig: het risico op grauwe schimmel
+        (Botrytis) groeit met de uren boven 90% RV,[^baptista2012] en aanhoudend vochtige
+        lucht hindert de calciumvoorziening en verlaagt de productie.[^bakker1991] Het doel
+        van hooguit {humid_hours_target:g} vochtige uren per dag is een instelling van de
+        tweeling, geen literatuurwaarde. Eén meetpunt voor het hele blok: de lucht kan per
+        plek verschillen.
+    co2:
+      title: CO₂
+      how: Gemeten in de meetbox, ppm.
+      source: "{lg}"
+      read: >-
+        Meer CO₂ maakt het licht productiever: de lichtbenuttingsefficiëntie stijgt met
+        ongeveer 10–15% per 100 ppm extra CO₂,[^nederhoff1994] en de productiewinst van
+        extra licht is groter bij hoge CO₂.[^marcelis2006] De grens van {co2_floor:g} ppm
+        is een eigen markering van de tweeling voor lampuren, geen drempel uit de
+        literatuur. Buitenlucht bevat ongeveer 425 ppm,[^noaa_aggi] dus luchten trekt de
+        kas daar naartoe.
+    heat_sp:
+      title: Stooktemperatuur
+      how: De luchttemperatuur waarop de klimaatcomputer stookt.
+      source: "{lg}"
+      read: >-
+        Ligt de lucht er ruim boven terwijl de buizen warm zijn, dan werd de buiswarmte voor
+        iets anders gevraagd (een minimumbuis, voor de vochtigheid).
+    delta_t:
+      title: Binnen − buiten
+      how: Kastemperatuur min buitentemperatuur.
+      source: >-
+        [Kastemperatuur](tag:lg_temp_greenhouse) − [buitentemperatuur](tag:lg_temp_outside),
+        beide van LetsGrow.
+      read: Wat de warmte door het glas en met de ventilatielucht naar buiten drijft.
+    lamps:
+      title: Lampen
+      how: >-
+        Aan/uit maal vermogensniveau. De leds van red schakelen als één installatie en
+        worden nooit gedimd, dus 0 of 100%; een stap van 15 minuten kan ertussen liggen als
+        er binnen die stap geschakeld werd.
+      source: "{lg}"
+      read: "Het hele blok tegelijk: elke lamp die je ziet doet hetzelfde."
+    lamp_power:
+      title: Lampwarmte
+      how: >-
+        {par:g} µmol/m²/s bij vol vermogen (het lampblad van de teler) ÷ een AANGENOMEN
+        efficiëntie van {efficacy:g} µmol/J (zo werden commerciële leds in 2020
+        gemodelleerd;[^katzin2021] de praktische grens van huidige leds ligt rond
+        3,4–4,1[^kusuma2020]) = {power_w} W/m², maal het lampaandeel. Al het elektrisch
+        vermogen eindigt als warmte in de kas.
+      source: Het lampblad van de teler en een aangenomen led-efficiëntie, beide [geconfigureerd](cfg:lamps).
+      read: >-
+        De warmte van de lampen in de balans. Een efficiëntere of minder efficiënte led
+        verschuift die evenredig; het is geen gemeten verbruik.
+    light_sum:
+      title: Lichtsom
+      how: >-
+        Zon: de buitenstraling opgeteld over de dag (W/m² × seconden ÷ 10.000 = J/cm²).
+        Lampen: {radiation_eq:g} J/cm² per vol lampuur, het buitenlicht-equivalent van de
+        teler uit het lampblad ([geconfigureerd](cfg:lamps)).
+      source: "{lg}"
+      read: >-
+        Het doel van de teler is {target:g} J/cm² per dag, een Nederlandse vuistregel
+        ("tomaten hebben minimaal 1000 joules per dag nodig"),[^flinterman2015] geteld in
+        dezelfde buitenlicht-eenheid. Daarboven blijft de productie met het licht stijgen:
+        +1% licht geeft +0,7–1% vruchten.[^marcelis2006]
+    day_length:
+      title: Daglengte
+      how: >-
+        Natuurlijk licht (buitenstraling boven 0) plus de uren dat de lampen brandden
+        zonder zon. De rest is donker. Geteld binnen de kalenderdag. Zonsopkomst en
+        -ondergang zijn astronomisch (zonnestand op de locatie); het station registreert
+        pas licht als de zon ~5° hoog staat, dus het gemeten natuurlijke licht is korter
+        dan van zonsopkomst tot zonsondergang.
+      source: "{lg}"
+      read: >-
+        De regel van de teler: een zo lang mogelijke dag, met minstens {dark_min} uur
+        ononderbroken rust. Tomaat heeft ongeveer zes uur donker nodig, en 18 uur licht is
+        het praktische maximum.[^velezramirez2014] Bij dezelfde lichtsom kan een kortere,
+        lichtere dag beter zijn: 15 uur versloeg 18 uur met 7% in een proef.[^dueck2007]
+        De klok in de weergave toont zon, lampen en donker rond de klok.
+    dark:
+      title: Langste ononderbroken donker
+      how: >-
+        De langste periode zonder zon en zonder lampen. Een nacht loopt over middernacht,
+        dus de periode kan de avond ervoor beginnen of de ochtend erna eindigen.
+      source: Als daglengte.
+      read: >-
+        Minstens {dark_min} uur, de regel van de teler voor de rust van het
+        gewas.[^velezramirez2014] Moet de dag korter, beëindig hem dan liever eerder op de
+        avond dan hem later op de ochtend te beginnen.[^vantongerlo2025]
+    lamp_h_needed:
+      title: Lampuren die het doel nodig had
+      how: >-
+        Het kleinste aantal hele lampuren dat de zon van de dag op {target:g} J/cm² brengt,
+        met ≥ {dark_min} uur ononderbroken donker, geen lampen boven {sun_max_w:g} W/m²
+        buiten, en {wake:g} lampuur verlies per keer aanschakelen terwijl het gewas wakker
+        wordt (gemeten op de weegschaal). Exact opgelost.
+      source: De zon van deze dag en de regels van de teler, zoals [geconfigureerd](cfg:rules).
+      read: Lampuren daarboven dienden de langste-dag-regel, niet het lichtdoel.
+    lamp_h_longest_day:
+      title: Lampuren van de langste dag
+      how: Elk uur met zon onder {sun_max_w:g} W/m², min de {dark_min} uur rust.
+      source: De zon van deze dag en de regels van de teler, zoals [geconfigureerd](cfg:rules).
+      read: Wat de langste-dag-regel vraagt; vergelijk met wat het doel nodig had.
+    pipe_temp:
+      title: Buistemperaturen
+      how: >-
+        Gemeten watertemperatuur van elk verwarmingsnet; tussen haakjes de temperatuur die
+        de klimaatcomputer vroeg.
+      source: >-
+        {lg} Gevraagd: [vraag buisrail](tag:lg_pipe_lower_calc),
+        [vraag groeibuis](tag:lg_pipe_growth_calc).
+      read: >-
+        Eén net verwarmt het hele blok: al zijn buizen voeren hetzelfde water. Kleur in de
+        weergave: staal op luchttemperatuur, oranje gloeiend naarmate het heter wordt.
+    pipe_heat:
+      title: Buiswarmte
+      how: >-
+        Per net vrije convectie volgens Bot (1983): 1,99·π·d·L·ΔT^1,32, plus straling
+        ε·σ·π·d·L·(Tp⁴ − Ta⁴) met ε = {emissivity:g}, waarbij ΔT buis- min
+        luchttemperatuur is (zoals in de kasmodellen van Vanthoor en
+        GreenLight).[^vanthoor2011a][^katzin2020] Geometrie ([geconfigureerd](cfg:pipes);
+        AANGENOMEN, uit de referentiekas van GreenLight; de eigen buizen van red zijn niet
+        bevestigd): {pipes}.
+      source: "{lg}"
+      read: >-
+        Warmte die de buizen aan de kas afgeven, W/m² vloer: een schatting uit de
+        buistemperaturen, geen meterstand.
+    vent_pos:
+      title: Raamstand
+      how: >-
+        Gemeten opening van de ramen aan lijzijde en windzijde, % van hun slag. De balans
+        gebruikt het gemiddelde van beide.
+      source: "{lg}"
+      read: >-
+        Elke zijde beweegt als geheel voor het hele blok. In de weergave volgt de lijzijde
+        de windrichting.
+    air_exchange:
+      title: Luchtuitwisseling
+      how: >-
+        Uit de gemiddelde raamstand via een [geconfigureerde](cfg:ventilation), op red
+        [gekalibreerde](term:calibrated) curve (m³ lucht per m² vloer per uur): {curve},
+        daartussen lineair. De curve is zo gefit dat de waterdamp die het gewas meetbaar
+        verdampt met de lucht vertrekt.
+      source: >-
+        De [geconfigureerde](cfg:ventilation) curve, gefit op red's eigen LetsGrow-gegevens
+        van 2023–26.
+      read: >-
+        Vooral gefit op nachten en milde uren: op zonnige dagen met wijd open ramen is de
+        echte uitwisseling waarschijnlijk hoger (zie de rest).
+    ventilation:
+      title: Warmte met de ventilatielucht
+      how: >-
+        Luchtuitwisseling × {rho_cp:g} J/m³K (warmte die een m³ lucht per °C
+        vasthoudt)[^fao56] × (binnen − buiten).
+      source: >-
+        Luchtuitwisseling, [kastemperatuur](tag:lg_temp_greenhouse),
+        [buitentemperatuur](tag:lg_temp_outside).
+      read: >-
+        Warmte die vertrekt doordat warme lucht voor koude wordt geruild. Alleen de voelbare
+        warmte: de waterdamp die ze meeneemt, staat onder verdampt water.
+    vapour_out:
+      title: Waterdamp met de ventilatielucht
+      how: Luchtuitwisseling × (absolute vochtigheid binnen − buiten).
+      source: >-
+        Luchtuitwisseling, [absolute vochtigheid binnen](tag:lg_abs_hum_greenhouse) en
+        [buiten](tag:lg_abs_hum_outside).
+      read: >-
+        Water dat de lucht meeneemt. Blijft het achter bij de verdamping van het gewas, dan
+        wordt de kas vochtiger (of het condenseert op het glas).
+    screen_pos:
+      title: Energiescherm
+      how: Gemeten gesloten aandeel.
+      source: "{lg} LetsGrow levert het pas vanaf 21 mei 2026."
+      read: >-
+        Gesloten verlaagt het het verlies van het kasdek met AANGENOMEN ~{screen_saving:.0%}
+        (nog niet gemeten op red; geen geverifieerde bron voor het getal) en laat het
+        ~{screen_transmission:.0%} van de zon door — beide [geconfigureerd](cfg:cover).
+    cover:
+      title: Warmte door het kasdek
+      how: >-
+        U × (binnen − buiten), met U = {u_open:g} + {u_wind:g} × wind (W/m² vloer per °C) ×
+        (1 − {screen_saving:g} × schermaandeel). {u_open:g} is
+        [gekalibreerd](term:calibrated) op red's gesloten, donkere nachten zonder lampen; de
+        windterm is LITERATUUR[^vanthoor2011a] en de schermbesparing een AANNAME — alles
+        [geconfigureerd](cfg:cover).
+      source: >-
+        [Kastemperatuur](tag:lg_temp_greenhouse), [buitentemperatuur](tag:lg_temp_outside),
+        [windsnelheid](tag:lg_wind_speed) en [energiescherm](tag:lg_energy_curtain) van
+        LetsGrow; de eigenschappen van het kasdek zijn [geconfigureerd](cfg:cover).
+      read: "Meestal het grootste verlies in een winternacht: glas, gevels en kieren samen."
+    sun:
+      title: Zon die binnen blijft
+      how: >-
+        Buitenstraling × {transmission:g} door glas en constructie
+        (× {screen_transmission:g} onder een gesloten scherm) × (1 − {reflected_share:g})
+        voor wat gewas en vloer terugkaatsen (LITERATUUR).[^goudriaan1994] Alle drie de
+        aandelen zijn [geconfigureerd](cfg:cover).
+      source: "{lg}"
+      read: >-
+        Zonnewarmte die in de kas blijft: op een zonnige dag veel meer dan de buizen geven.
+    residual:
+      title: Rest (opgeslagen / onverklaard)
+      how: >-
+        Warmte erin (zon + lampen + buizen) min warmte eruit (kasdek + ventilatielucht +
+        verdampt water).
+      source: De balans zelf.
+      read: >-
+        Warmte die lucht, gewas, bodem en constructie opslaan (positief, opwarmen) of
+        afgeven (negatief), plus modelfout. Een paar % op winterdagen; groot op zonnige
+        zomerdagen, als open ramen meer lucht verplaatsen dan de curve kent. Wordt nooit
+        over de andere stromen verdeeld.
+    transpiration:
+      title: Gewasverdamping
+      how: >-
+        Tussen de watergiftbeurten — vanaf {quiet_min} minuten na een beurt, als de mat
+        niet meer draint — het gewichtsverlies van de weegschaal over 30 minuten ÷
+        {scale_area:g} m² gewas dat ze draagt[^degelder2016] (ze wordt ~{scale_area:g} kg
+        zwaarder per l/m² watergift). Daartussen vult een [gekalibreerde](term:calibrated),
+        [geconfigureerde](cfg:crop_water) vorm de gaten
+        (ml/m²/u = {tr_intercept:g} + {tr_sun:g}·zon + {tr_lamp:g}·lampen +
+        {tr_hd:g}·vochtdeficit + {tr_pipe:g}·buiswarmte), geschaald zodat de dag klopt met
+        de waterbalans.
+      source: "{lg}"
+      read: >-
+        De activiteit van het gewas: hoe hard het water trekt. 'gemeten' = de weegschaal,
+        'gemodelleerd' = de vorm. Eén weegschaal, één gootdeel: de rest van het blok kan
+        afwijken.
+    evaporation:
+      title: Warmte als verdampt water
+      how: >-
+        Verdamping × {latent_mj:g} MJ per kg verdampt water, de verdampingswarmte rond
+        20 °C.[^fao56]
+      source: Gewasverdamping.
+      read: >-
+        Het gewas koelt de kas door te verdampen; die warmte vertrekt met de waterdamp door
+        de ramen of condenseert op het glas.
+    wake:
+      title: Wanneer het gewas wakker werd
+      how: >-
+        Na het aanschakelen van de lampen in het donker (of na zonsopkomst): het moment
+        waarop de verdamping de helft van de weg aflegde van haar niveau ervoor naar haar
+        plateau 2–4 uur later.
+      source: Gewasverdamping van de weegschaal; de lamp- en stralingsgegevens.
+      read: >-
+        Na het aanschakelen van de lampen heeft de fotosynthesecapaciteit ongeveer 30
+        minuten nodig om op te bouwen;[^dueck2007] de weegschaal laat dezelfde vertraging
+        zien in de verdamping — ongeveer {wake:g} lampuur per keer aanschakelen, die het
+        lichtplan meerekent.
+    weight:
+      title: Gewicht weegschaal
+      how: Gemeten gewicht van één gootdeel met zijn matten en planten.
+      source: "{lg}"
+      read: >-
+        Springt omhoog bij elke watergiftbeurt en zakt terwijl het gewas drinkt. Ze draagt
+        ~{scale_area:g} m² gewas ([gekalibreerd](term:calibrated) op hoeveel ze per
+        watergift zwaarder wordt) — een steekproef van het blok.
+    irrigation:
+      title: Watergift vandaag
+      how: >-
+        De dagteller van LetsGrow, afgelezen vlak voordat die om middernacht reset (tot 2025
+        om 23:00).
+      source: "{lg}"
+      read: Gegeven water per m², gelijk voor de hele klepsectie.
+    drain:
+      title: Drain vandaag
+      how: Dagteller, afgelezen als de watergift; het aandeel is drain ÷ watergift.
+      source: "{lg}"
+      read: >-
+        Waar de meter zit, is niet vastgelegd; een drainmeter meet meestal een paar goten,
+        niet het blok. Hij loopt uren achter op de giftbeurten, dus alleen het dagtotaal
+        wordt gebruikt.
+    ec_drain:
+      title: Drain-EC
+      how: Gemeten elektrische geleidbaarheid van het drainwater, mS/cm.
+      source: "{lg}"
+      read: >-
+        Boven de EC van de watergift: de mat concentreert zouten (het gewas nam meer water
+        op dan voedingsstoffen).
+    crop_water:
+      title: Gewaswater
+      how: >-
+        Watergift − drain − de gewichtsverandering van de weegschaal over de dag
+        (÷ {scale_area:g} m²); weggelaten als het onwaarschijnlijk is (een teeltwisseling).
+      source: "{lg}"
+      read: >-
+        Wat het gewas over de dag verdampte, l/m²: het totaal waarop de verdamping per uur
+        wordt geschaald.
+    humid_h:
+      title: Vochtige uren
+      how: Uren met de gemeten RV vanaf {humid_rh:g}%.
+      source: "{lg}"
+      read: >-
+        Doel: hooguit {humid_hours_target:g} uur per dag. Ver daaronder blijven kost warmte
+        (buizen aan met de ramen open); vocht regelen met gewasgebonden grenzen in plaats
+        van een vaste RV-instelling bespaarde in proeven energie.[^korner2003]
+    heat_mj:
+      title: Buiswarmte over de dag
+      how: De buiswarmte opgeteld over de dag, MJ per m² vloer.
+      source: Als buiswarmte.
+      read: >-
+        De verwarming van de dag in energie-eenheden, vergelijkbaar tussen dagen. Geen
+        gasmeterstand.
+    lamp_h:
+      title: Lampuren
+      how: Uren op vol vermogen, opgeteld over de dag.
+      source: "{lg}"
+      read: Vergelijk met de lampuren die het lichtdoel nodig had.
+    sensors:
+      title: Wat er waar gemeten wordt
+      how: >-
+        De klimaatcomputer meet de lucht in één meetbox, en het water van het gewas op één
+        weegschaal onder één goot. Het weerstation staat buiten op het dak. Lampen, buizen,
+        ramen en scherm worden voor het hele blok ingesteld.
+      source: >-
+        LetsGrow-modules [Climate B4](mod:climate) (meetbox, buizen, ramen, scherm),
+        [Water B4](mod:water) (weegschaal, watergift, drain), [Grow light B4](mod:lamps) en
+        het [weerstation](mod:weather). De precieze plek van de box in het blok is niet
+        vastgelegd; de weergave zet hem midden in de kas.
+      read: >-
+        Alles wat de tweeling over lucht en gewas zegt, rust op die ene plek, terwijl de
+        actuatoren overal werken. Bij gevels, onder open ramen, boven de buisrail of in een
+        hoek kan het klimaat afwijken — dichte sensornetwerken in praktijkkassen vinden
+        warme, koude en vochtige plekken[^rezvani2020][^wur_wireless] — microklimaten die
+        deze gegevens niet zien. De ring in de weergave illustreert dat alleen; hoe ver één
+        box voor het blok spreekt, is niet bekend.
+
+  advice:
+    light_sum:
+      not_judged:
+        title: Lichtsom niet beoordeeld
+        detail: Van deze dag is minder dan 23 uur vastgelegd.
+      sun_enough:
+        title: De zon alleen haalde het lichtdoel
+        detail: "{sun} J/cm² zon tegenover {target:.0f}; de lampen bleven uit."
+      short:
+        title: Lichtsom {light} J/cm², onder het doel van {target:.0f}
+        detail: >-
+          Zon {sun} J/cm² en {lamp_h:.1f} lampuren. Elk vol lampuur voegt {k:.0f} J/cm²
+          toe; met ≥ {dark_min} uur donker had het doel {needed:.0f} uur nodig.
+      extra:
+        title: "{extra:.1f} lampuren boven het lichtdoel"
+        detail: &light_detail_nl >-
+          De lampen brandden {lamp_h:.1f} uur voor een lichtsom van {light} J/cm². In hele
+          uren, met ≥ {dark_min} uur donker en {wake:g} uur ontwaken van het gewas per keer
+          aanschakelen, had {target:.0f} J/cm² {needed:.0f} uur nodig. Uren daarboven dienen
+          de langste-dag-regel, niet het lichtdoel.
+      matched:
+        title: Lampen passend bij het lichtdoel ({lamp_h:.1f} uur)
+        detail: *light_detail_nl
+    heat_vented:
+      wasted:
+        title: "{mj:.1f} MJ/m² buiswarmte ging door open ramen naar buiten"
+        detail: >-
+          De buizen waren warm terwijl de ramen boven {vent_open:g}% open stonden op droge
+          lucht (RV < {dry_rh:g}%) en de lucht al boven de stooktemperatuur lag. Die warmte
+          was niet nodig voor temperatuur of vocht: verlaag in deze uren de minimumbuis.
+      ok:
+        title: Geen warmte verloren door de ramen
+        detail: Buiswarmte en open ramen op droge lucht vielen niet samen.
+    screen:
+      not_logged:
+        title: Schermstand niet vastgelegd
+        detail: >-
+          LetsGrow levert het energiescherm pas vanaf 21 mei 2026; daarvoor wordt het
+          scherm open getekend en wordt de besparing niet geschat.
+      save:
+        title: Het scherm in het donker sluiten had {saved:.1f} MJ/m² bespaard
+        detail: >-
+          Het energiescherm bleef open tijdens donkere, koude uren. Gesloten kost het dan
+          geen licht en verlaagt het het warmteverlies van het kasdek met aangenomen
+          ~{saving:.0%} (nog niet gemeten op red).
+      ok:
+        title: Scherm gebruikt in de donkere uren
+        detail: Geen donkere, koude uren met het scherm open.
+    humidity:
+      humid:
+        title: "{hours:.1f} uur boven {rh:g}% RV"
+        detail: >-
+          Lange vochtige periodes verhogen het Botrytis-risico[^baptista2012] en remmen het
+          calciumtransport.[^bakker1991] Zet een kier in de ramen of het scherm voordat je
+          de buiswarmte verhoogt; dat voert waterdamp af met minder energie.[^dezwart2021]
+      dried:
+        title: Harder gedroogd dan nodig
+        detail: >-
+          Minder dan een half uur boven {rh:g}% RV, gekocht met buiswarmte die naar buiten
+          gelucht werd. In de [analyse van vier seizoenen](term:research) door de tweeling
+          kostte de stap van ~3 naar ~1 vochtig uur per dag ~30% meer warmte.
+      ok:
+        title: "{hours:.1f} uur boven {rh:g}% RV"
+        detail: Binnen het doel van {target:g} uur per dag.
+    dark:
+      short:
+        title: Maar {hours:.1f} uur ononderbroken donker
+        detail: >-
+          Het gewas heeft minstens {dark_min} uur ononderbroken donker
+          nodig.[^velezramirez2014] Moet de dag korter, schakel dan 's avonds eerder uit in
+          plaats van 's ochtends later aan.[^vantongerlo2025]
+      ok:
+        title: "{hours:.1f} uur ononderbroken donker"
+        detail: >-
+          Daglengte {light_h:.1f} uur (zon {sun_h:.1f} uur, alleen lampen {lamp_h:.1f} uur);
+          de rest hield de regel van ≥ {dark_min} uur aan.
+    co2:
+      low:
+        title: CO₂ {ppm} ppm terwijl de lampen brandden
+        detail: >-
+          Elk lampuur levert meer vruchten op bij hogere CO₂.[^nederhoff1994] Het zakt als de
+          ramen na het aanschakelen opengaan; dan doseren, of minder luchten, verhoogt wat de
+          lampen waard zijn.
+    irrigation:
+      late:
+        title: Eerste watergift {lag:.1f} uur nadat het gewas wakker werd
+        detail: >-
+          De verdamping steeg om {wake}; de eerste start kwam om {start}. Dichter bij het
+          gemeten ontwaken starten voorkomt dat de mat eerst uitdroogt.
+      early:
+        title: Eerste watergift {lag:.1f} uur voordat het gewas wakker werd
+        detail: >-
+          De eerste start kwam om {start}, voordat de verdamping steeg ({wake}); water voor
+          een slapend gewas loopt grotendeels weg als drain.
+      ok:
+        title: Watergift begon om {start}
+        detail: Dicht bij het ontwaken van het gewas ({wake}).
+
+  ui:
+    close: Sluiten
+    no_data: Geen gegevens.
+    play: Afspelen
+    time_of_day: Tijdstip
+    tip:
+      configured: Geconfigureerde waarden
+      all: Alle geconfigureerde waarden
+      configured_note: Met deze getallen rekent de tweeling; ernaast staat telkens waar ze vandaan komen.
+      series: LetsGrow-gegevensreeks
+      series_note: elke 5 minuten vastgelegd
+      module: LetsGrow-module
+    term:
+      calibrated: >-
+        Door het team van de tweeling gefit op red's eigen LetsGrow-gegevens (2023–26), in
+        plaats van uit een handboek gehaald — het beschrijft dus deze kas, en wordt opnieuw
+        gefit als de kas of haar sensoren veranderen.
+      research: >-
+        De onderzoeksnotitie van de tweeling: vier seizoenen LetsGrow-gegevens van red
+        (2023–26), geanalyseerd op warmte, licht, luchtvochtigheid en gewasactiviteit, met de
+        literatuur achter elke regel. Verkrijgbaar bij het team van de tweeling.
+    comp:
+      lamps: Lampen
+      pipes: Verwarmingsbuizen
+      vents: Luchtramen
+      screen: Energiescherm
+      crop: Gewas
+      substrate: Substraat
+      weather: Weerstation
+      cover: Kasdek
+      sensors: Sensoren (hier gemeten)
+    blurb:
+      lamps: Led-toplights boven elke rij, geschakeld als één installatie. Klik op een getal om te zien hoe het tot stand komt.
+      pipes: >-
+        Twee warmwaternetten voor het hele blok: de buisrail over de vloer en de groeibuis
+        in het gewas. Hun warmte wordt geschat uit de gemeten watertemperatuur.
+      vents: >-
+        Luchtramen met het scharnier in de nok: openen tilt de onderrand op. Lijzijde en
+        windzijde worden apart gestuurd, elk voor het hele blok.
+      screen: Energiescherm op goothoogte, in elke kap vanaf de goot dichtgetrokken.
+      crop: Hogedraadtomaat. Zijn activiteit is zijn verdamping, gewogen op de substraatweegschaal onder één gootdeel.
+      substrate: Steenwolmatten in hangende goten. Eén gootdeel hangt aan de weegschaal.
+      weather: Het weerstation van LetsGrow op het dak.
+      cover: "Het glazen dak en de gevels: wat er van de zon binnenkomt en welke warmte weglekt."
+    flow:
+      sun: Zon die binnen blijft
+      lamps: Lampen
+      pipes: Verwarmingsbuizen
+      cover: Door het kasdek
+      ventilation: Met de ventilatielucht
+      evaporation: Als verdampt water
+      residual: Opgeslagen / onverklaard
+    scope:
+      spot: Op één plek gemeten
+      block: Hele blok
+      outside: Buiten
+      model: Berekend
+      rule: Regel van de teler
+    balloon:
+      how: Zo wordt het berekend
+      source: Waar de gegevens vandaan komen
+      read: Zo lees je het
+      sources: Bronnen
+    legend:
+      sun: zon
+      lamps_on: lampen aan
+      dark: donker
+      humid: RV ≥ {rh}%
+    layer:
+      zone: Meetgebied
+      vapour: Waterdamp
+      flows: Warmtestromen
+      labels: Labels
+      roof: Dak & scherm
+      inside: Binnenaanzicht
+      overview: Overzicht
+    dial:
+      day_length: daglengte
+      value: "{light} uur licht: zon {sun} uur + alleen lampen {lamps} uur; langste donker {dark} uur"
+      sun: zon {h} uur
+      lamps: lampen
+      dark: donker {h} uur (min. {min})
+      sunrise: zon {rise}–{set}
+    hud:
+      outside: Buiten · {date} {time}
+      inside: Binnen · op het meetpunt
+      air: Lucht
+      rh: RV
+      sun: Zon
+      wind: Wind
+      co2: CO₂
+      crop: Gewas
+    pin:
+      "on": aan · {w} W/m²
+      "off": uit
+      cover_out: "{w} W/m² eruit"
+    row:
+      lamps_now: Lampen nu
+      lamp_heat_now: Lampwarmte nu
+      day_length: Daglengte
+      day_length_value: "{light} uur (zon {sun} + alleen lampen {lamps})"
+      longest_dark: Langste donker
+      light_sum_today: Lichtsom vandaag
+      lamp_h_today: Lampuren vandaag
+      lamp_h_needed: …nodig voor het doel
+      lamp_h_longest: …bij de langste dag
+      pipe_rail: Buisrail
+      growth_pipe: Groeibuis
+      pipe_value: "{temp} °C (gevraagd {asked})"
+      heat_into: Warmte de kas in
+      heat_sp: Stooktemperatuur
+      heat_sp_value: "{sp} °C (lucht {air})"
+      lee_wind: Lij / wind
+      air_exchange: Luchtuitwisseling
+      heat_out_air: Warmte eruit met de lucht
+      vapour_out: Waterdamp eruit met de lucht
+      rh_inside: RV binnen
+      screen_closed: Scherm gesloten
+      not_logged: niet vastgelegd
+      cover_out: Warmte door het kasdek
+      delta_t: Binnen − buiten
+      transpiration: Verdamping
+      measured: gemeten
+      modelled: gemodelleerd
+      evap_heat: Verdampingswarmte
+      air: Lucht
+      air_value: "{t} °C, {rh}% RV"
+      co2: CO₂
+      woke: Wakker geworden
+      woke_value: "{wake} ({cause} om {trigger}, +{lag} min)"
+      weight: Gewicht weegschaal
+      irr_today: Watergift vandaag
+      drain_today: Drain vandaag
+      crop_water_today: Gewaswater vandaag
+      ec_drain: Drain-EC
+      outside_air: Buitenlucht
+      outside_rh: RV buiten
+      radiation: Globale straling
+      wind: Wind
+      wind_value: "{speed} m/s uit {dir}°"
+      sun_kept: Zon die binnen blijft
+      box_air: "Meetbox: lucht"
+      box_co2: "Meetbox: CO₂"
+      scale_weight: "Weegschaal: gewicht"
+      scale_e: "Weegschaal: verdamping"
+      roof_out: "Dak: buitenlucht"
+      block_lamps: "Hele blok: lampen"
+      block_pipes: "Hele blok: buizen"
+      block_vents: "Hele blok: ramen"
+      block_screen: "Hele blok: scherm"
+    cause:
+      lamps: lampen
+      sunrise: zonsopkomst
+    sensors:
+      legend_spot: "staat voor de plek in de gearceerde ring: de tweeling neemt aan dat het hele blok zich zo gedraagt."
+      legend_block: instellingen werken overal tegelijk.
+      toggle: Zet {chip} uit om de rest van het blok zonder grijs te zien.
+      link: Waar elke sensor zit, en wat dat betekent →
+    chart:
+      lamps_on: lampen aan, %
+      light_so_far: licht tot nu, J/cm²
+      pipe_heat: buiswarmte, W/m²
+      vent: raamstand, %
+      rh: RV, %
+      screen: scherm gesloten, %
+      cover_loss: verlies kasdek, W/m²
+      co2: CO₂, ppm
+      wind_speed: windsnelheid, m/s
+      wind_from: uit, ° (0 = noord)
+    series:
+      lamps: lampen
+      sun_lamps: zon + lampen
+      sun: zon
+      target: doel
+      pipe_rail: buisrail
+      growth_pipe: groeibuis
+      air: lucht
+      pipes: buizen
+      lee: lij
+      windward: wind
+      rh_inside: RV binnen
+      screen: scherm
+      cover: kasdek
+      measured: gemeten
+      modelled: gemodelleerd
+      co2: CO₂
+      scale_weight: gewicht weegschaal
+      radiation: straling
+      outside: buiten
+      inside: binnen
+      sun_in: zon erin
+      cover_loss: verlies kasdek
+      heat_sp: stooktemperatuur
+      kept_inside: binnen gehouden
+      wind: wind
+      direction: richting
+      as_ran: zoals gedraaid
+      what_if: wat als
+    panel:
+      balance_at: Energiebalans om {time}
+      heat_in: Warmte erin, W/m²
+      heat_out: Warmte eruit, W/m²
+      remainder: Rest
+      remainder_note: >-
+        De rest is warmte die lucht, gewas en constructie opslaan of afgeven, plus
+        modelfout. Klik op een stroom om te zien hoe die berekend wordt.
+      over_day: Over de dag, MJ/m²
+      click_hint: Klik op een deel van de kas, of een label, voor details.
+      advice: Advies
+      at: om {time}
+    day:
+      in_sun: "Erin: zon"
+      in_lamps: "Erin: lampen"
+      in_pipes: "Erin: buizen"
+      out_cover: "Eruit: kasdek"
+      out_air: "Eruit: ventilatielucht"
+      out_water: "Eruit: verdampt water"
+      remainder: Rest
+      remainder_value: "{mj} ({share}% van de warmte erin)"
+    wi:
+      title: Wat als
+      vents_before: Elke raamstand op
+      vents_after: van wat er draaide
+      vents_label: ramen op {pct}%
+      screen: Scherm dicht in elk donker uur
+      lamps_off: Lampen de hele dag uit
+      running: De balans wordt berekend…
+      unavailable: "Wat-als niet beschikbaar: {error}"
+      pipe_heat: Buiswarmte
+      humid_hours: Uren ≥ {rh}% RV
+      max: max. {rh}%
+      surplus: Overtollige warmte om weg te luchten
+      note: Zelfde luchttemperatuur als gemeten; veranderingen ten opzichte van de balans met de echte instellingen.
+    level:
+      act: Actie
+      consider: Overweeg
+      info: Let op
+      ok: OK
+    advice:
+      sub_one: "Voor {date}, zoals de tweeling het had geadviseerd: {n} punt om op te handelen of te overwegen."
+      sub_many: "Voor {date}, zoals de tweeling het had geadviseerd: {n} punten om op te handelen of te overwegen."
+    impact:
+      mj: "{mj} MJ/m² buiswarmte"
+      lamp_h: "{h} lampuren"
+      jcm2: "{v} J/cm² ten opzichte van het doel"
+      humid: "{h} uur vochtig"
+      dark: "{h} uur donker"
+      lag: "{h} uur na ontwaken"
+      ppm: "{ppm} ppm"
+    tile:
+      pipe_heat: Buiswarmte
+      pipe_heat_sub: geschat uit de buistemperaturen
+      day_length: Daglengte
+      day_length_sub: zon {sun} + lampen {lamps} · donker {dark} uur
+      lamps: Lampen
+      lamps_sub: doel had {needed} uur nodig · langste dag {longest} uur
+      light_sum: Lichtsom
+      light_sum_sub: zon {sun} · doel {target}
+      crop_water: Gewaswater
+      crop_water_sub: watergift {irr} · drain {drain}
+      humid: Vochtige uren
+      humid_sub: RV ≥ {rh}% · doel ≤ {target} uur
+      woke: Gewas wakker
+      woke_sub: "{lag} min na {cause} ({trigger})"
+      no_woke: geen duidelijke stijging op de weegschaal
+    tm:
+      fetching: De zonvoorspelling wordt opgehaald…
+      aria: Voorspelde zon voor morgen per uur
+      bar: "{hour}:00 · zon {v} J/cm²"
+      no_lamps_above: hierboven geen lampen
+      unit: zon, J/cm² per uur
+      none: Geen schema haalt {target} J/cm² met {dark} uur donker.
+      zero: "De zon alleen zou {target} J/cm² moeten halen: geen lampen nodig voor het doel."
+      need_html: >-
+        Voor {target} J/cm²: <strong>{h} lampuren</strong> in één blok (½ uur daarvan wordt
+        het gewas wakker), buiten de {dark} uur rust en niet bij sterke zon.
+      forecast: "{date}: voorspelde zon {sun} J/cm² over {h} uur daglicht."
+      how: Hoe?
+      longest: De langste dag ({h} lampuren, {dark} uur rust) zou ~{light} J/cm² geven
+      longest_more: ", {more} lampuren meer dan het doel nodig heeft"
+      source: >-
+        Zonvoorspelling: OpenMeteo, globale straling per uur; {k} J/cm² per vol lampuur.
+        Geen prijzen: wanneer de lampuren vallen, laat de tweeling aan de teler.
+      unavailable: "Licht voor morgen niet beschikbaar: {error}"
+    load:
+      loading: De kas wordt geladen…
+      no_data: Geen gegevens voor deze dag.
+      failed: "De dag kon niet worden geladen: {error}"

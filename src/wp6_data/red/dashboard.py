@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from pathlib import Path
 
 import structlog
 
@@ -18,6 +19,7 @@ from wp6_data.red.routes import (
     dli,
     dli_model,
     energy,
+    greenhouse,
     multi_height,
     sijia,
 )
@@ -27,6 +29,7 @@ from wp6_data.red.routes.sijia.card import render_sijia_card
 from wp6_data.red.tsdb import ensure_schema_red
 from wp6_data.shared import render_card
 from wp6_data.shared.app_factory import create_app
+from wp6_data.shared.i18n import th
 from wp6_data.shared.object_store_health import (
     status_card as object_store_status_card,
 )
@@ -195,38 +198,40 @@ async def _shutdown() -> None:
     await close_pool()
 
 
-def _dli_card() -> str:
+def _hero(key: str, href: str, card_class: str) -> str:
+    """One home card, in the visitor's language (catalogue ``red_home.<key>``)."""
     return render_card(
-        "Light Analysis (DLI)",
-        '<a href="/dli" role="button">DLI Dashboard</a>',
-        description="Daily Light Integral analysis and optimization tools.",
-        card_class="card-bg card-bg-sun",
+        th(f"red_home.{key}.title"),
+        f'<a href="{href}" role="button">{th(f"red_home.{key}.button")}</a>',
+        description=th(f"red_home.{key}.description"),
+        card_class=card_class,
     )
 
+
+def _dli_card() -> str:
+    return _hero("dli", "/dli", "card-bg card-bg-sun")
+
+
+def _greenhouse_card() -> str:
+    return _hero("greenhouse", "/greenhouse", "card-bg card-bg-greenhouse")
+
+
 def _energy_card() -> str:
-    return render_card(
-        "Energy",
-        '<a href="/energy" role="button">Lamps &amp; Heating</a>',
-        description="Lamp-hours and heat output per day, year against year.",
-        card_class="card-bg card-bg-energy",
-    )
+    return _hero("energy", "/energy", "card-bg card-bg-energy")
 
 
 def _crop_cycles_card() -> str:
-    return render_card(
-        "Crop Cycles",
-        '<a href="/crop-cycles/" role="button">Cohort Waterfall</a>',
-        description="Overlapping 8-week fruit cohorts against the climate they grew in.",
-        card_class="card-bg card-bg-cycles",
-    )
+    return _hero("crop_cycles", "/crop-cycles/", "card-bg card-bg-cycles")
 
 
 def _multi_height_card() -> str:
-    return render_card(
-        "Multi Height",
-        '<a href="/multi_height" role="button">Multi Height Views</a>',
-        description="Visual overview of sensor data at multiple heights.",
-        card_class="card-bg card-bg-multi-height",
+    return _hero("multi_height", "/multi_height", "card-bg card-bg-multi-height")
+
+
+def _sensor_docx() -> str:
+    return (
+        '<a href="/static/red/sensor_locations.docx" download role="button"'
+        f' class="outline" style="width:100%">{th("red_home.sensor_docx")}</a>'
     )
 
 
@@ -256,15 +261,15 @@ config = TwinConfig(
                    multi_height.router, 
                    crop_cycles.router,
                    energy.router,
+                   greenhouse.router,
                    sijia.router],
-    hero_cards=[_dli_card, _multi_height_card, _crop_cycles_card, _energy_card],
+    hero_cards=[
+        _greenhouse_card, _dli_card, _multi_height_card, _crop_cycles_card, _energy_card,
+    ],
     status_extras=[render_sijia_card, object_store_status_card],
 
-    home_extra_html=(
-        '<a href="/static/red/sensor_locations.docx" download role="button"'
-        ' class="outline" style="width:100%">'
-        "Download Sensor Device Identification (docx)</a>"
-    ),
+    home_extra_html=_sensor_docx,
+    i18n_dir=Path(__file__).parent / "i18n",
     lifespan_startup=_startup,
     lifespan_shutdown=_shutdown,
 )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from wp6_data.shared import i18n
+from wp6_data.shared.i18n import th
 from wp6_data.shared.templates import config
 from wp6_data.shared.templates.assets import (
     DASHBOARD_CSS,
@@ -42,11 +44,29 @@ def _render_source_indicator() -> str:
     icon = '<span style="font-size:0.9rem;opacity:0.6">\u26c1</span>'
     label = config._data_sources[0].label
     return (
-        f'<span title="Data source: {label}"'
+        f'<span title="{th("nav.data_source", label=label)}"'
         f' style="display:flex;align-items:center;gap:0.3rem;cursor:default">'
         f"{icon}"
         f'<span style="font-size:0.75rem;opacity:0.7">{label}</span>'
         f"</span>"
+    )
+
+
+def render_language_switch() -> str:
+    """EN · DE · NL in the nav; a click keeps the page and its query, adding ``lang``."""
+    if not i18n.offered():
+        return ""
+    now = i18n.current()
+    links = "".join(
+        f'<a href="?lang={lang}" data-lang="{lang}" hreflang="{lang}" lang="{lang}"'
+        f' title="{i18n.NAMES[lang]}"'
+        + (' class="is-current" aria-current="true"' if lang == now else "")
+        + f">{lang.upper()}</a>"
+        for lang in i18n.LANGS
+    )
+    return (
+        f'<div class="nav-group nav-lang" role="group" aria-label="{th("nav.language")}">'
+        f"{links}</div>"
     )
 
 
@@ -60,9 +80,9 @@ def render_nav_bar(*, show_source_indicator: bool = True) -> str:
 
     groups = [
         '<div class="nav-group">'
-        '<a href="/">Home</a>'
-        '<a href="/dashboard">Dashboard</a>'
-        '<a href="/chart">Chart</a>'
+        f'<a href="/">{th("nav.home")}</a>'
+        f'<a href="/dashboard">{th("nav.dashboard")}</a>'
+        f'<a href="/chart">{th("nav.chart")}</a>'
         "</div>",
     ]
     if source_html:
@@ -70,12 +90,15 @@ def render_nav_bar(*, show_source_indicator: bool = True) -> str:
     if user:
         groups.append(
             f'<div class="nav-group">'
-            f'<span class="nav-user">{user} | <a href="/auth/logout">Logout</a></span>'
+            f'<span class="nav-user">{user} | '
+            f'<a href="/auth/logout">{th("nav.logout")}</a></span>'
             f"</div>",
         )
+    if switch := render_language_switch():
+        groups.append(switch)
     groups.append(
         '<div class="nav-group">'
-        '<button id="theme-toggle" title="Toggle dark mode">'
+        f'<button id="theme-toggle" title="{th("nav.theme_toggle")}">'
         '<span class="icon-sun">&#9788;</span>'
         '<span class="icon-moon">&#9790;</span>'
         "</button></div>",
@@ -118,7 +141,7 @@ def render_page(
         Complete HTML document as string
     """
     back_html = (
-        f'<div class="back"><a href="{back_url}">&larr; Home</a></div>'
+        f'<div class="back"><a href="{back_url}">&larr; {th("page.back_home")}</a></div>'
         if show_back_link
         else ""
     )
@@ -127,13 +150,14 @@ def render_page(
     if config._source_url:
         footer_links.append(
             f'<a href="{config._source_url}" target="_blank" rel="noopener"'
-            f' class="footer-icon" aria-label="Source code" title="Source code">'
+            f' class="footer-icon" aria-label="{th("footer.source_code")}"'
+            f' title="{th("footer.source_code")}">'
             f"{CODE_ICON_SVG}</a>",
         )
     if config._docs_url:
         footer_links.append(
             f'<a href="{config._docs_url}" target="_blank" rel="noopener"'
-            f' class="footer-icon" aria-label="Documentation" title="Documentation">'
+            f' class="footer-icon" aria-label="{th("footer.docs")}" title="{th("footer.docs")}">'
             f"{DOCS_ICON_SVG}</a>",
         )
     links_html = (
@@ -160,7 +184,7 @@ def render_page(
 
     return f"""
     <!DOCTYPE html>
-    <html data-dashboard="{config.require_dashboard_id()}"{version_attr}>
+    <html lang="{i18n.current()}" data-dashboard="{config.require_dashboard_id()}"{version_attr}>
     <head>
         <title>{title}</title>
         <link rel="icon" id="favicon" href="/static/favicon.svg" type="image/svg+xml">
