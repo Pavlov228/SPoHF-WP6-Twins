@@ -1,0 +1,36 @@
+<svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" width="600" height="200">
+  <defs>
+    <linearGradient id="ghFade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="white" stop-opacity="0"/>
+      <stop offset="25%" stop-color="white" stop-opacity="0"/>
+      <stop offset="55%" stop-color="white" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="white" stop-opacity="1"/>
+    </linearGradient>
+    <mask id="ghMask">
+      <rect x="0" y="0" width="600" height="200" fill="url(#ghFade)"/>
+    </mask>
+  </defs>
+  <g mask="url(#ghMask)" fill="none" stroke="white" stroke-linejoin="round" stroke-linecap="round">
+    <!-- roof: a row of small ridges, one vent open -->
+    <path d="M300 70 L330 46 L360 70 L390 46 L420 70 L450 46 L480 70 L510 46 L540 70 L570 46 L600 70"
+          stroke-width="3" stroke-opacity="0.6"/>
+    <path d="M450 46 L472 30" stroke-width="3" stroke-opacity="0.75"/>
+    <path d="M300 70 L600 70" stroke-width="2" stroke-opacity="0.45"/>
+    <path d="M300 70 L300 186 M600 70 L600 186" stroke-width="2" stroke-opacity="0.4"/>
+    <!-- vapour rising -->
+    <path d="M395 92 q6 -8 0 -16 q-6 -8 0 -16" stroke-width="2" stroke-opacity="0.35"/>
+    <path d="M515 92 q6 -8 0 -16 q-6 -8 0 -16" stroke-width="2" stroke-opacity="0.35"/>
+    <!-- crop rows -->
+    <g stroke-width="2.5" stroke-opacity="0.55">
+      <path d="M360 176 L360 100 M420 176 L420 100 M480 176 L480 100 M540 176 L540 100"/>
+    </g>
+    <g fill="white" stroke="none" fill-opacity="0.45">
+      <circle cx="354" cy="112" r="7"/><circle cx="366" cy="128" r="7"/><circle cx="356" cy="146" r="6"/>
+      <circle cx="414" cy="110" r="7"/><circle cx="426" cy="126" r="7"/><circle cx="416" cy="148" r="6"/>
+      <circle cx="474" cy="114" r="7"/><circle cx="486" cy="130" r="7"/><circle cx="476" cy="150" r="6"/>
+      <circle cx="534" cy="110" r="7"/><circle cx="546" cy="128" r="7"/><circle cx="536" cy="146" r="6"/>
+    </g>
+    <!-- heating pipes along the floor -->
+    <path d="M300 184 L600 184 M300 190 L600 190" stroke-width="3" stroke-opacity="0.5"/>
+  </g>
+</svg>

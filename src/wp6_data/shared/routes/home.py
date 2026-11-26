@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 
 from wp6_data.shared import render_card, render_page
 from wp6_data.shared.auth import verify_session_user
+from wp6_data.shared.i18n import th
 from wp6_data.shared.routes.deps import get_twin_config
 from wp6_data.shared.twin import TwinConfig
 
@@ -28,31 +29,32 @@ async def home(
             result = await result
         hero_html_parts.append(result)
     hero_html = "\n".join(hero_html_parts)
+    extra = config.status_card_extra_html
+    status_extra = extra() if callable(extra) else extra
 
     content = f"""
         <h1>{config.title}</h1>
 
         {render_card(
-            "Dashboard",
+            th("home.dashboard.title"),
             '<div style="display:flex;gap:0.5rem">'
-            '<a href="/dashboard" role="button">My Dashboard</a>'
+            f'<a href="/dashboard" role="button">{th("home.dashboard.mine")}</a>'
             '<a href="/chart" role="button" class="outline">'
-            'New Chart</a>'
+            f'{th("home.dashboard.new_chart")}</a>'
             '<a href="/explore" role="button" class="outline">'
-            'Explore</a></div>',
-            description="Your bookmarked charts in one view, a new chart "
-            "from scratch, or every device and sensor in one table.",
+            f'{th("home.dashboard.explore")}</a></div>',
+            description=th("home.dashboard.description"),
             card_class="card card-bg card-bg-chart",
         )}
 
         {hero_html}
 
         {render_card(
-            "Status &amp; Coverage",
+            th("home.status.title"),
             '<div style="display:flex;gap:0.5rem;flex-wrap:wrap">'
-            '<a href="/status" role="button">View Status</a>'
-            f'{config.status_card_extra_html}</div>',
-            description="Data coverage timeline and sync status.",
+            f'<a href="/status" role="button">{th("home.status.button")}</a>'
+            f'{status_extra}</div>',
+            description=th("home.status.description"),
             card_class="card-bg card-bg-status",
         )}
     """

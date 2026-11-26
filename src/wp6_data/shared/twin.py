@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import pandas as pd
@@ -147,8 +148,13 @@ class TwinConfig:
     status_extras: list[Callable[..., Awaitable[str] | str]] = field(
         default_factory=list,
     )
-    #: Extra buttons shown beside "View Status" on the home page's status card.
-    status_card_extra_html: str = ""
+    #: Extra buttons shown beside "View Status" on the home page's status card;
+    #: a callable is rendered per request (so it can follow the visitor's language).
+    status_card_extra_html: str | Callable[[], str] = ""
+    #: Folder with this twin's translation catalogues (en/de/nl.yaml), loaded
+    #: next to the shared ones (see wp6_data.shared.i18n). Without one the twin
+    #: stays English and offers no language choice.
+    i18n_dir: Path | None = None
     explore_extra_tabs: dict[str, tuple[str, str]] = field(default_factory=dict)
     require_auth: bool = True
     export_sanitise_names: bool = False
